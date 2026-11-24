@@ -860,6 +860,15 @@ fn blinks(frame: u64, resource: This, state: u32, shown: Option<bool>) {
             levels = ?crate::capture::recent_levels(),
             "a black frame after a frame that was not"
         );
+        // `draw::trace` keeps these only while debug logging for that module is
+        // on, so a run at `info` reports the black frame with nothing to show.
+        // Say which switch records them, rather than a warning with no lines.
+        if draws.is_empty() {
+            tracing::warn!(
+                frame,
+                "black frame: no draw traced (VICTORY_LOG=victory_gpu::draw=debug records them)"
+            );
+        }
         for d in draws {
             tracing::warn!("black frame {frame}: {d}");
         }
