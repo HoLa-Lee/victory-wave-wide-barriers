@@ -815,6 +815,35 @@ pub(super) fn wave_local(p: &Program, st: &Structured) -> Result<(), (usize, &'s
     pass(&mut kind, &mut firsts, true)
 }
 
+thread_local! {
+    /// Set while a program is translated through [`super::widen`]: its branches
+    /// around cross-lane code are taken wave-wide, and a barrier in one of them
+    /// can stand where not every lane arrives. A wait for the group there leaves
+    /// the other host wave standing (Windows then resets the card), so those
+    /// barriers are translated as `VICTORY_GROUP_SYNC=1` leaves them: fence kept,
+    /// wait dropped where a lane may not reach it.
+    static WIDE_FORM: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Runs `f` with [`WIDE_FORM`] set, restoring the previous value after.
+pub fn with_wide_form<R>(f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            WIDE_FORM.with(|c| c.set(self.0));
+        }
+    }
+    let _reset = Reset(WIDE_FORM.with(|c| c.replace(true)));
+    f()
+}
+
+/// [`super::group_sync`] as this program must use it: a wave-wide translation
+/// takes mode 1, because a lane may never reach one of its barriers.
+fn effective_group_sync() -> u8 {
+    let mode = super::group_sync();
+    if mode == 2 && WIDE_FORM.with(|c| c.get()) { 1 } else { mode }
+}
+
 /// The mode of a group barrier the translation adds (host waves meeting):
 /// a wait for the group with a shared-memory fence; the fence alone with
 /// `VICTORY_GROUP_SYNC=0` ([`super::group_sync`]).
@@ -4638,8 +4667,12 @@ impl<'a> Lower<'a> {
                 // s_barrier make those writes visible on the console).
                 let mut mode = if self.writes_uavs { 1 | 2 | 8 } else { 1 | 8 };
                 // Without the wait for the group (bit 0) where not every
-                // lane arrives, or where the switch says so.
-                let waits = match super::group_sync() {
+                // lane arrives, or where the switch says so. A wave-wide
+                // translation takes mode 1 here whatever the switch says
+                // (`effective_group_sync`): its barriers stand in the branches
+                // it took wave-wide, and a wait there is what lost the card in
+                // the runs that first used that form.
+                let waits = match effective_group_sync() {
                     0 => false,
                     1 => !self.fence_only.contains(&b),
                     _ => true,
@@ -10752,13 +10785,39 @@ fn interp_mode(kind: Barycentric) -> Option<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lowered, Numeric, Parts, buffer_format, half_shift, lower};
+    use super::{
+        Lowered, Numeric, Parts, buffer_format, effective_group_sync, half_shift, lower, with_wide_form,
+    };
     use crate::native::{
         ComputeIo, HwStage, NativeProgram, ResourceType, RootParam, RootType, StageIo, UsedResource,
     };
     use crate::{io, ir, resource, structure};
 
     const S_ENDPGM: u32 = 0xBF81_0000;
+
+    /// A wave-wide translation must never leave a wait for the group where a lane
+    /// may not arrive: with `VICTORY_GROUP_SYNC` unset (mode 2) it takes mode 1
+    /// for the program it is translating, and the switch's own value comes back
+    /// afterwards. A switch that already drops the wait is left as it is.
+    #[test]
+    fn the_wide_form_takes_the_fence_only_barrier_mode() {
+        let outer = crate::emit::group_sync();
+        assert_eq!(
+            effective_group_sync(),
+            outer,
+            "outside the form the switch decides"
+        );
+        assert_eq!(
+            with_wide_form(effective_group_sync),
+            if outer == 2 { 1 } else { outer },
+            "inside it, a barrier a lane may not reach keeps only its fence"
+        );
+        assert_eq!(
+            effective_group_sync(),
+            outer,
+            "and the switch's value is restored"
+        );
+    }
 
     #[test]
     fn packed_pixel_inputs_find_their_second_row() {

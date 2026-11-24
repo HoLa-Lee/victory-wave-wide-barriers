@@ -531,7 +531,11 @@ fn widen(
         let io = io::raise(p, native)?;
         let res = resource::track(p, &native.layout, native.stage, Some(&st))?;
         lower::take_needs();
-        let r = emit_program(c, native, p, &st, &io, &res);
+        // A wave-wide translation takes the barriers of the blocks it widened as
+        // `VICTORY_GROUP_SYNC=1` does (`lower::with_wide_form`): the wait for the
+        // group cannot stand where a lane may never arrive, and a host wave waiting
+        // there is what lost the card in the runs that first used this form.
+        let r = lower::with_wide_form(|| emit_program(c, native, p, &st, &io, &res));
         let needs = lower::take_needs();
         // (or translated for 64-lane waves still: shared memory read and written where not
         // every lane runs, whose blocks the lowering names too)
