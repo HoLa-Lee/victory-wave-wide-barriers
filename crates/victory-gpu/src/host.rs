@@ -570,12 +570,22 @@ fn create() -> windows::core::Result<Host> {
         // the widest wave the GPU runs: 32 (NVIDIA) gets console wave64 compute programs whose
         // cross-lane code stays in 32-lane halves translated for waves of 32
         let mut o1 = D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
-        if device
+        // Logged whether or not it answers: a silent failure here left the
+        // translator on `HOST_MAX_WAVE = 0` (no host-specific form at all)
+        // and nothing said so. Run 96 (the card) and run 96's WARP twin both
+        // printed no "host wave lanes" line, so this answered failure on
+        // both adapters or not at all.
+        match device
             .CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS1, (&raw mut o1).cast(), size_of_val(&o1) as u32)
-            .is_ok()
         {
-            tracing::info!(min = o1.WaveLaneCountMin, max = o1.WaveLaneCountMax, "host wave lanes");
-            victory_shader::emit::set_host_max_wave(o1.WaveLaneCountMax);
+            Ok(()) => {
+                tracing::info!(min = o1.WaveLaneCountMin, max = o1.WaveLaneCountMax, "host wave lanes");
+                victory_shader::emit::set_host_max_wave(o1.WaveLaneCountMax);
+            }
+            Err(e) => tracing::warn!(
+                error = %e,
+                "the host would not say how wide its waves are; wave64 programs keep the forms that need no host"
+            ),
         }
         let messages = debug
             .then(|| device.cast::<ID3D12InfoQueue>().ok())
@@ -2737,27 +2747,37 @@ impl Host {
                 HighestShaderModel: D3D_SHADER_MODEL_6_6,
             };
             // SAFETY: each query writes its own structure of the given size.
-            let ok = unsafe {
-                self.device
-                    .CheckFeatureSupport(
-                        D3D12_FEATURE_D3D12_OPTIONS7,
-                        (&raw mut options).cast(),
-                        size_of_val(&options) as u32,
-                    )
-                    .is_ok()
-                    && self
-                        .device
-                        .CheckFeatureSupport(
-                            D3D12_FEATURE_SHADER_MODEL,
-                            (&raw mut model).cast(),
-                            size_of_val(&model) as u32,
-                        )
-                        .is_ok()
+            // Both answers are kept apart so a refusal says which query
+            // refused (`VICTORY_FEATURE_TRACE` runs ask for the rest).
+            let tier = unsafe {
+                self.device.CheckFeatureSupport(
+                    D3D12_FEATURE_D3D12_OPTIONS7,
+                    (&raw mut options).cast(),
+                    size_of_val(&options) as u32,
+                )
             };
+            let shader_model = unsafe {
+                self.device.CheckFeatureSupport(
+                    D3D12_FEATURE_SHADER_MODEL,
+                    (&raw mut model).cast(),
+                    size_of_val(&model) as u32,
+                )
+            };
+            match (&tier, &shader_model) {
+                (Err(e), _) => tracing::warn!(error = %e, "the host would not answer the mesh shader tier query"),
+                (_, Err(e)) => tracing::warn!(error = %e, "the host would not answer the shader model query"),
+                _ => {}
+            }
+            let ok = tier.is_ok() && shader_model.is_ok();
             let mesh = ok
                 && options.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED
                 && model.HighestShaderModel.0 >= D3D_SHADER_MODEL_6_6.0;
-            tracing::info!(mesh, "host mesh shader support");
+            tracing::info!(
+                mesh,
+                tier = format_args!("{:?}", options.MeshShaderTier),
+                highest_shader_model = model.HighestShaderModel.0,
+                "host mesh shader support"
+            );
             mesh
         })
     }

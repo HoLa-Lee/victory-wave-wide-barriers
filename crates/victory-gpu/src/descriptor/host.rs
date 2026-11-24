@@ -574,21 +574,54 @@ impl HostHeap {
             }
         };
         let extra = if sampler { 0 } else { DYNAMIC };
-        let (heap, count, size) = match make(count + extra) {
-            Ok(heap) => (heap, count, count + extra),
-            Err(e) if !sampler && count + extra > PORTABLE_VIEWS => {
+        let requested = count + extra;
+        // `VICTORY_VIEW_HEAP_CAP`: pretend the host caps view heaps at this
+        // many views, so the software adapter can be walked through the
+        // fallback a card takes. The card is the adapter that runs out
+        // (NVIDIA stops at 1,000,000 views per heap); a run on WARP with a
+        // cap set is the same path without the card, and with a process
+        // that only ends instead of a machine that may hang.
+        let cap = std::env::var("VICTORY_VIEW_HEAP_CAP")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok());
+        let over = cap.is_some_and(|cap| requested > cap);
+        let first = if over { None } else { Some(make(requested)) };
+        // The title's own heap past the host's limit, or a cap we were told
+        // to take.
+        let fallback = !sampler && (over || requested > PORTABLE_VIEWS);
+        let (heap, count, size) = match &first {
+            Some(Ok(heap)) => (heap.clone(), count, requested),
+            _ if fallback => {
+                let limit = cap.unwrap_or(PORTABLE_VIEWS);
+                match &first {
+                    Some(Err(e)) => tracing::warn!(
+                        error = %e,
+                        title = count,
+                        extra,
+                        requested,
+                        limit,
+                        "host view heap capped: the title's heap does not fit"
+                    ),
+                    _ => tracing::warn!(
+                        title = count,
+                        extra,
+                        requested,
+                        limit,
+                        "host view heap held at the cap VICTORY_VIEW_HEAP_CAP set"
+                    ),
+                }
                 // shortcut: descriptors past the host's limit are left out; a title that reaches
                 // them needs remapping. The heap's last slot stays null, and shaders read it for
                 // any view index from there on (`set_view_heap_limit`): a read past the heap's
                 // end hung NVIDIA's GPU (the title's heap is a little over 1 000 000 views).
-                tracing::warn!(error = %e, count, "host view heap capped at {PORTABLE_VIEWS}; views past it read a null slot");
-                victory_shader::emit::set_view_heap_limit(PORTABLE_VIEWS - 1);
-                (make(PORTABLE_VIEWS).ok()?, PORTABLE_VIEWS - extra - 1, PORTABLE_VIEWS)
+                victory_shader::emit::set_view_heap_limit(limit - 1);
+                (make(limit).ok()?, limit - extra - 1, limit)
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 tracing::warn!(error = %e, count, sampler, "no host descriptor heap");
                 return None;
             }
+            None => return None,
         };
         // SAFETY: a live heap.
         let (cpu, step) = unsafe {
@@ -597,7 +630,16 @@ impl HostHeap {
                 host.device.GetDescriptorHandleIncrementSize(kind),
             )
         };
-        tracing::debug!(count, sampler, "host descriptor heap");
+        // Counts of both: the title's heap is a little over 1,000,000 views
+        // and NVIDIA stops a heap there, so whether `count` is the title's
+        // whole heap or what was left of it is the one number a run needs.
+        tracing::info!(
+            title_slots = count,
+            dynamic = extra,
+            host_slots = size,
+            sampler,
+            "host descriptor heap"
+        );
         // SAFETY: a live shader-visible heap.
         let gpu = unsafe { heap.GetGPUDescriptorHandleForHeapStart().ptr };
         GPU_RANGES.lock().unwrap_or_else(|e| e.into_inner()).push((
@@ -1241,9 +1283,14 @@ impl HostHeap {
     pub(crate) fn mirror(&self, index: u32, handle: u64, for_draw: bool) -> Option<View> {
         if index >= self.count {
             // Diagnostic (NVIDIA heap cap): the highest title slot past the
-            // host heap seen so far.
+            // host heap seen so far. One line per 2^16 of them, not one per
+            // slot: the title writes its heap in order, so run 96 printed
+            // 310,720 of these (the first at 934,464, the last at 1,245,121)
+            // and nothing else could be read in the log.
             static HIGHEST: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-            if HIGHEST.fetch_max(index, std::sync::atomic::Ordering::Relaxed) < index {
+            if HIGHEST.fetch_max(index, std::sync::atomic::Ordering::Relaxed) < index
+                && (index % 65536 == 0 || index - self.count < 8)
+            {
                 tracing::warn!(
                     index,
                     count = self.count,

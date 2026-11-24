@@ -210,7 +210,7 @@ Upstream (`70564ae`), same dump, same binary:
 
 | adapter | rate | draws | device |
 |---|---|---|---|
-| RTX 4080 SUPER | 0.1–0.2 fps, 6,300–6,700 ms/frame | 2 | lost (`0x887A0004` / `0x887A0001`) |
+| RTX 4080 SUPER | 0.1–0.2 fps, 6,300–6,700 ms/frame | 2 | lost (reason `0x887A0001`; the `0x887A0004` in that line is the DRED query, see below) |
 | WARP | 15 fps, 66.7 ms/frame | 21 | none; `crashes.log` never written |
 
 The card is **150x slower than the software adapter** and then dies, which is
@@ -227,6 +227,105 @@ the opposite of what it should do. Two more facts narrow it:
 layer asks this driver for a capability it does not grant, outside any command
 list. The next probes are `CheckFeatureSupport` and the resource creations, not
 the submissions.
+
+### The probes ran: `0x887A0004` was this layer's own DRED call
+
+Three runs with the traces below, and the reading above does not survive them.
+
+**`0x887A0004` is not a device answer.** It is what
+`GetAutoBreadcrumbsOutput` returns when device-removed data was **never
+enabled**: `removal_data` (`host.rs`) asks for breadcrumbs only after
+`ID3D12DeviceRemovedExtendedData1` casts, and a device that did not get
+`VICTORY_D3D12_DRED` at creation refuses the query with `DXGI_ERROR_UNSUPPORTED`.
+So the line
+
+```
+host GPU device removed after a submission of 1 lists; no breadcrumbs (… 0x887A0004); device removed: … 0x887A0001
+```
+
+says *this run had no DRED*, and the removal's own reason is the second
+HRESULT, `DXGI_ERROR_INVALID_CALL`. With DRED on, the same removal reads
+`breadcrumbs (done/count, list) []` and no `0x887A0004` appears anywhere.
+`GetDeviceRemovedReason` never said "unsupported".
+
+**The title asks no capability question.** `device.rs`'s
+`check_feature_support` now logs every query with `VICTORY_FEATURE_TRACE=1`.
+A 40-second run of the first-run flow on the card, the same on WARP, and a
+40-second card run with `VICTORY_WAVE_WIDE=1` produce **zero** of those lines:
+the title does not call `CheckFeatureSupport` at all on this path. The host's
+own capability asks are the wave lanes (below) and, when a mesh pipeline is
+made, mesh tier at shader model 6.6 — and `mesh_shaders()` is never called
+either. There is no query whose answer differs to blame.
+
+**The card's device loss belongs to `70564ae`, not to this tree.** Same dump,
+same card, same menus, same `diag` build settings, fresh data folder, DRED on,
+35 s each:
+
+| tree | adapter | rate | draws | view heap (title slots / host slots) | wave lanes | device |
+|---|---|---|---|---|---|---|
+| `70564ae` (upstream) | RTX 4080 SUPER | 0.1–0.2 fps, 6,300–6,700 ms/frame | 2 | 1,245,184 / 934,464 (capped) | not asked | **lost at ~7 s**, `0x887A0001`, breadcrumbs `[]` |
+| `2119b0e` + this branch | RTX 4080 SUPER | 30.0 fps, 31–33 ms/frame | 21 | 1,245,184 / 737,855 (capped) | min 32 / max 32 | none in 40 s, with and without `VICTORY_WAVE_WIDE=1` |
+| `2119b0e` + this branch | WARP | 21–30 fps, 33–46 ms/frame | 21 | 1,245,184 / 1,507,328 (no cap) | min 4 / max 4 | none |
+
+`2119b0e`'s merge base with `70564ae` **is** `70564ae`: the fork is 225 commits
+ahead of it, and `e9765a7 Fix the device loss introduced by the wave64 update`
+is one of them (ancestor check, 0). So the loss the last report measured was
+already fixed in the branch's base, and nothing in these five commits touches
+it. On this tree the card is not 150x slower than the software adapter: it
+renders the same menus at 30 fps against WARP's 21–30, where `70564ae` renders
+them at 0.1–0.2 on the same card.
+
+### The one capability the two adapters answer differently: wave lanes
+
+`host.rs` now logs the `D3D12_FEATURE_D3D12_OPTIONS1` answer whether it
+succeeds or fails (it used to be silent on failure, which is how a run could
+translate shaders with `HOST_MAX_WAVE = 0` and say nothing):
+
+```
+RTX 4080 SUPER   host wave lanes min=32 max=32
+WARP             host wave lanes min=4   max=4
+```
+
+That is the whole adapter difference the translator sees, and it is the one
+`#101` is about: on 32 lanes a console wave64 program runs as two host waves,
+on 4 as sixteen, and `set_host_max_wave` is what lets the exact forms be
+tried at all. It does not decide the device loss — the failing tree never asks.
+
+### The other one: the title's view heap is 1,245,184 slots and the card stops at 1,000,000
+
+`HostHeap::new` now prints what it asked for and what it got:
+
+```
+RTX 4080 SUPER  host view heap capped: the title's heap does not fit
+                error=… (0x80070057) title=1245184 extra=262144 requested=1507328 limit=1000000
+                host descriptor heap title_slots=737855 dynamic=262144 host_slots=1000000
+WARP            host descriptor heap title_slots=1245184 dynamic=262144 host_slots=1507328
+```
+
+WARP makes the title's heap and 2^18 dynamic slots in one go (1,507,328). The
+card refuses anything past 1,000,000, so the fallback keeps 1,000,000 slots and
+**737,855 of the title's 1,245,184** — 507,329 slots (41%) have no host
+descriptor, and a shader that indexes one reads whatever the heap's last slot
+holds. On `70564ae` the same cap left 934,464 (its `DYNAMIC` is 2^16), and the
+per-submission sweep that tree runs over the title's heap printed
+`title slot past the host heap` **310,720** times, one per slot it could not
+make: 1,245,184 − 934,464 exactly.
+
+Missing descriptors alone do not remove a device: with the cap forced on the
+software adapter (`VICTORY_VIEW_HEAP_CAP=1000000`) WARP keeps running at
+22 fps for the whole run. So this is a defect for the world, whose heaps are
+past 737,855, and not the `0x887A0004`.
+
+### What the three switches are
+
+- `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
+  answer's first sixteen words.
+- `VICTORY_VIEW_HEAP_CAP=<n>`: pretend the host caps view heaps at `n`, so the
+  software adapter takes the fallback a card takes (the run above).
+- The wave-lane and view-heap lines print at `info` without a switch.
+- `title slot past the host heap` is now one line per 2^16 of them instead of
+  one per slot: that warning was 310,720 lines (3.4 MB) in one run.
+
 
 ### The opening animation never plays at all
 `movies.rpf` is registered with DirectStorage at start-up and nothing else: no

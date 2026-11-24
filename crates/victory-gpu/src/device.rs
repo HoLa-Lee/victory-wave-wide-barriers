@@ -262,12 +262,50 @@ const OPTIONS: [u32; 16] = [
     2,  // resource heap tier
 ];
 
+/// `VICTORY_FEATURE_TRACE=1`: every feature query the title makes, with the
+/// answer it was given. The console's answers do not depend on the adapter
+/// (they are the constants below); the adapter's own answers come from the
+/// host device and are logged in `host` instead. A trace here is for
+/// counting what the title asks, and for seeing an answer it refuses.
+fn feature_trace_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_FEATURE_TRACE").is_some())
+}
+
+/// The first words of a feature answer, for a trace line.
+fn answer_words(data: *const c_void, size: u32) -> String {
+    if data.is_null() {
+        return "null".to_owned();
+    }
+    let words = (size as usize / 4).min(16);
+    // SAFETY: the caller passed a buffer of `size` bytes (checked before
+    // the answer was written), or a null one, which is refused above.
+    let words: Vec<u32> = (0..words)
+        .map(|i| unsafe { data.cast::<u32>().add(i).read_unaligned() })
+        .collect();
+    format!("{words:x?}")
+}
+
 extern "system" fn check_feature_support(
     _: This,
     feature: u32,
     data: *mut c_void,
     size: u32,
 ) -> HRESULT {
+    let hr = feature_query(feature, data, size);
+    if feature_trace_on() {
+        tracing::info!(
+            feature,
+            size,
+            hr = format_args!("{hr:#x}"),
+            answer = answer_words(data, size),
+            "device feature query"
+        );
+    }
+    hr
+}
+
+fn feature_query(feature: u32, data: *mut c_void, size: u32) -> HRESULT {
     const OPTIONS_QUERY: u32 = 0;
     const ARCHITECTURE: u32 = 1;
     const FEATURE_LEVELS: u32 = 2;
