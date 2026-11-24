@@ -160,8 +160,22 @@ is the second most asked one in the log).
 `XPackage` is not it: `xgameruntime::missing` warns with its area and slot on
 every call, and a whole run produces **no** "runtime method not implemented"
 line at all. So of the fifteen slots this fork leaves out there, the title
-calls none — it asks for the interface and then uses what is implemented. The
-quota is what is left.
+calls none — it asks for the interface and then uses what is implemented.
+
+The quota is not it either: `storage::space_info` and
+`storage::prompt_for_space` now log what they answer, and a whole first-run
+walk produces **no** line from either. The title never asks how much room it
+has. With `files` at debug, the same walk asks for 233 paths and four of them
+are on the persistent drive:
+
+```
+Z:\settings\   Z:\cloudpers\   Z:\cloudcache\   Z:\cloudcache\*
+```
+
+Three directories and one wildcard. It never asks about a file, never asks for
+room, and never submits a save. So the flow does not fail to save — **it never
+reaches saving**. Whatever it reads in those three directories is what it
+decides on, and all three are empty on a fresh data folder.
 
 ## The whole pack translates, and the wave-wide form is never reached
 

@@ -140,7 +140,11 @@ fn space() -> SpaceInfo {
 }
 
 extern "system" fn space_info(_: This, out: *mut SpaceInfo) -> HRESULT {
-    put(out, space())
+    let info = space();
+    // The first-run flow stops before it writes anything; this is what it is
+    // told about the room it has, for whichever run is chasing that.
+    tracing::info!(available = info.available_free, total_free = info.total_free, used = info.used, total = info.total, "storage: space asked for");
+    put(out, info)
 }
 
 /// Tells our prompts apart from other calls on the same block.
@@ -148,11 +152,13 @@ static PROMPT: u8 = 0;
 
 /// There is nobody to ask: granted when the quota has room, else declined.
 extern "system" fn prompt_for_space(_: This, bytes: u64, block: *mut AsyncBlock) -> HRESULT {
-    let hr = if bytes <= space().total_free {
+    let room = space().total_free;
+    let hr = if bytes <= room {
         S_OK
     } else {
         E_ABORT
     };
+    tracing::info!(bytes, room, hr, "storage: room asked for");
     xasync::finished(block, (&raw const PROMPT).cast(), hr)
 }
 
