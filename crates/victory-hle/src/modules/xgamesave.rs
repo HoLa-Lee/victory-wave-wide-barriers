@@ -720,6 +720,7 @@ extern "system" fn create_container(
     if !valid_container(&name) {
         return INVALID_CONTAINER_NAME;
     }
+    tracing::info!(container = %name, "xgamesave: create_container");
     put(out, give(p.container(&name)))
 }
 extern "system" fn close_container(_: This, container: *mut Container) {
@@ -841,6 +842,7 @@ extern "system" fn create_update(
     let Some(c) = get(container) else {
         return E_INVALIDARG;
     };
+    tracing::info!(container = %c.name, "xgamesave: create_update");
     put(
         out,
         give(Update {
@@ -878,6 +880,7 @@ extern "system" fn write_blob(
         // SAFETY: the title passes `size` bytes.
         unsafe { std::slice::from_raw_parts(data, size) }.to_vec()
     };
+    tracing::info!(blob = %name, size, "xgamesave: write_blob");
     update.changes.push((name, Some(data)));
     S_OK
 }
@@ -891,6 +894,12 @@ extern "system" fn delete_blob(_: This, update: *mut Update, name: *const c_char
         }
         _ => E_INVALIDARG,
     }
+}
+
+extern "system" fn submit(_: This, update: *const Update) -> HRESULT {
+    let hr = get(update).map_or(E_INVALIDARG, Update::submit);
+    tracing::info!(hr, "xgamesave: submit (blocking)");
+    hr
 }
 
 extern "system" fn submit_async(_: This, update: *const Update, block: *mut AsyncBlock) -> HRESULT {
@@ -930,7 +939,7 @@ static VTABLE: Methods<30> = Methods([
     close_update as *const (),         // 0xc0
     write_blob as *const (),           // 0xc8
     delete_blob as *const (),          // 0xd0
-    missing::<27> as *const (),        // 0xd8 submit (blocking)
+    submit as *const (),               // 0xd8 submit (blocking)
     submit_async as *const (),         // 0xe0
     submit_result as *const (),        // 0xe8
 ]);
