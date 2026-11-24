@@ -204,8 +204,31 @@ back twice in the last four commits), or the programs that need it only appear
 once the world loads, which this machine cannot reach. The run that settles it
 is the same one #101 describes, on a machine already in the world.
 
-### The opening animation never plays at all
+### On the card the device is lost before the menus; on WARP it runs
 
+Upstream (`70564ae`), same dump, same binary:
+
+| adapter | rate | draws | device |
+|---|---|---|---|
+| RTX 4080 SUPER | 0.1–0.2 fps, 6,300–6,700 ms/frame | 2 | lost (`0x887A0004` / `0x887A0001`) |
+| WARP | 15 fps, 66.7 ms/frame | 21 | none; `crashes.log` never written |
+
+The card is **150x slower than the software adapter** and then dies, which is
+the opposite of what it should do. Two more facts narrow it:
+
+- With `VICTORY_D3D12_DRED=1` the breadcrumbs are **empty**
+  (`(done/count, list) []`), so no command list of ours faulted — the device
+  goes while something is created or queried outside one.
+- `VICTORY_COPY_MODE=none` and `plain` both still lose it, so the per-frame
+  copy of title memory is not the trigger. `VICTORY_D3D12_DEBUG=1` prints
+  nothing at all, so the debug layer does not see it as an API misuse.
+
+**Read:** `DXGI_ERROR_UNSUPPORTED` on the card with a clean WARP run means the
+layer asks this driver for a capability it does not grant, outside any command
+list. The next probes are `CheckFeatureSupport` and the resource creations, not
+the submissions.
+
+### The opening animation never plays at all
 `movies.rpf` is registered with DirectStorage at start-up and nothing else: no
 `Bink*` import is called, and no media interface is asked for. Presented frames
 agree — `frame-1` to `frame-64` are pure black, and from `frame-120` on every
