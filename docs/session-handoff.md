@@ -201,3 +201,13 @@ cargo build --profile diag -p victory --features diagnostics
 - 不要重复认领 `FIND-2` / `NEW-5` / `GPU-HOST-MEMORY` / `FIND-3`
 - 不要自己批 CI（无权限），也不要以为 `action_required` 是代码问题
 - 不要再往 `Z:\` 塞文件试图"修好首启"（已定论：那是条款页，不是设置/存档）
+
+---
+
+## 13. 更新（2026-11-26 00:40，写在这份 handoff 之后）
+
+- **上游最新两笔已经合并**：`3973179`（逐帧构成测量、parts 合并、copy-back 走自己的 view，9.6 fps）+ `465b94f`（散乱间接记录每 list 只 clamp 一次，`VICTORY_INDIRECT_GATHER=1`，10.3 fps）
+  → 本地与远端 main 都是 **`36b1207`**，`cargo check -p victory-gpu` 通过
+  → **新会话不要再合并一次**；下一步是**验证**：`VICTORY_FAST=1` + `VICTORY_TEXTURE_STAGE_MB=64` + `VICTORY_INDIRECT_GATHER=1` 跑一次卡上，看 4.5 fps 能否往 8–10 fps 靠
+- 冲突解决方式（供理解改动）：`draw.rs` 取了上游的 jump-window 块（我们的"提交时刷新参数"实验无效果）；`host.rs` 保留上游 `present`/`present_now` 拆分并把 present trace 的地址贯穿进去；`Held::Present` 扩成 4 字段；删掉上游已废弃的 `crate::indirect::done`
+- `CLAIMS.md` 仍停在 `sha=5d4c495 / last_comment=7164183778`（13:48 UTC 之后未更新）；我们 14:54 UTC 的两条评论仍未登记
