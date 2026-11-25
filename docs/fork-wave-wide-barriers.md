@@ -953,3 +953,33 @@ That is the state to hand on: the replay is real, quantified, and reproduces in 
 run with two switches; what is not yet known is which side re-delivers the older picture —
 the title's own copy between its two buffers, or this layer's copy into the host copy of the
 second one.
+
+### 2026-11-25 10:20: 21 pictures in 161 frames, held one frame at a time
+
+The same joined run, counted as runs of identical pictures instead of pairs:
+
+```
+161 frames, 21 distinct pictures
+run lengths: 7, 48, 1,1,1, … (1 repeated 148 times), 6
+```
+
+So the picture changes on almost every presented frame (148 single-frame runs), and only three
+long holds exist — one 7-frame, one 6-frame, and one 48-frame static screen. Together with
+"130 of 149 frames equal the frame three back" that reads as a **three-deep rotation over a
+slowly changing set of pictures**: a new picture enters the rotation every few frames and is
+then shown again two frames later.
+
+What that is not: a frozen copy (it changes every frame), an authored three-frame loop (the
+set of pictures changes: 21 of them), or a buffer mix-up (two title resources and two host
+copies, one-to-one, alternating).
+
+What is left is the same question, and it needs one more number: for the presented host copy,
+**how many times it has been written by the GPU since its last present**. That counter belongs
+next to `Hosted`/`HostTexture` and is logged with the same present line; with it, a picture
+that comes back is either "this host copy was not written in the meantime" (the layer's copy)
+or "it was written, and the title drew that" (the title's own timing).
+
+### Upstream, this round
+
+`Marvisak/VIctory` at `940d32f` and `fxceless/victory-fork` at `c96b4f2` — no new commits
+since the last check.
