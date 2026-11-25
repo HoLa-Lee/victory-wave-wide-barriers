@@ -1047,3 +1047,25 @@ candidate — the title's own three-phase glow — fits every number.**
 
 and `cargo build --profile diag -p victory --features diagnostics` clean. That is the state
 the 31 unpushed commits sit on.
+
+### 2026-11-25 10:50: an empty `settings.xml` is enough — the title only checks that the file is there
+
+Three arms, WARP, 40 s each, `Enter` at 15/20/25/30 s, fresh data folder, only the seeded
+file differing, counting the first world packs opened (`core_restofworld`, `story000`):
+
+| `Z:\settings\settings.xml` | world packs at 40 s |
+|---|---|
+| full file the flow wrote (3,921 bytes) | **8**, first at 16 s |
+| a 162-byte skeleton (`<rage__fwSystemSettingsCollection>` with version 6.0 only) | **8** |
+| **a 0-byte file** | **8** |
+
+So the flow does not read the settings back to decide anything: it asks whether the file
+exists (`GetFileAttributesW`, then `CreateFileW`, four seconds in — the calls the section above
+logged), and if it does, the setup pages never come. The 0-byte file is still 0 bytes at the
+end of the run, so the title's own save path did not rewrite it either — it runs on defaults.
+
+That closes the question this objective opened: *what decides "the profile exists"* is the
+presence of `Z:\settings\settings.xml`, not the two other directories, not their contents, and
+not anything inside the file. The title will still write a real one when the flow walks it
+(see the section above), and a launcher can therefore pick either: walk the flow once, or drop
+any file of that name.
