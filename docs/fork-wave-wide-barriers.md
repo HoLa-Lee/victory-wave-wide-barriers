@@ -1168,6 +1168,45 @@ and the shader is in the dump's `shaders.rpf` as `f133…`-style hashes name the
 The two compute refusals are separate and unchanged: `a lane mask exchanged where not every lane
 runs` (`lower.rs` 3111, 3757) and `a descriptor's address or format read as data` (5600).
 
+### 2026-11-25 16:40: what the two pixel shaders want out of the eight dwords
+
+`DESC-USE` (new, printed with `DESC-WHY`) names the next instructions that read any of the eight
+dwords of a refused descriptor load. Card run, 190 s, no removal, and both sites print the same
+six:
+
+```
+DESC-WHY 0x1c5c s_load_dwordx8 … dynamic: Some(Value(8559))
+DESC-USE s_lshr_b32 dwords [1]
+DESC-USE s_lshl_b32 dwords [2]
+DESC-USE s_bfe_u32  dwords [2]
+DESC-USE s_or_b32   dwords [0]
+DESC-USE s_bfe_u32  dwords [3]
+DESC-USE s_and_b32  dwords [0]
+```
+
+Read against the GFX10 image descriptor layout this layer already rebuilds (see
+`descriptor_data`'s own note: dword 1 bits 30-31 and dword 2 width-1, height-1 at 14, dword 3
+identity swizzle, last level at 16, type at 28, dword 4 depth or layers):
+
+- **dword 2 and dword 3 are the size and type fields** — the ones the image branch already
+  reconstructs from the host view's dimensions (`s_lshl_b32 [2]`, `s_bfe_u32 [2]`, `s_bfe_u32 [3]`).
+- **dword 1 is shifted right**, which is where the layout puts the top of the address.
+- **dword 0 is masked and OR-ed** (`s_or_b32 [0]`, `s_and_b32 [0]`) — dword 0 is the low half of the
+  resource's base address, and the only field with no rebuilt value.
+
+So the two shaders are not reading a format to branch on: they are **rebuilding the resource's GPU
+address and its extents out of the descriptor**, the way bindless/streaming code does. That is a
+value this layer can supply: a host resource's GPU address *is* its CPU address here (`resource.rs`'s
+own premise), and the address-only path already answers the two address dwords for loads of up to
+four dwords (5686-5699). What is missing is the same answer for an `x8` load whose other dwords are
+the size fields the image branch rebuilds.
+
+That makes the shape of the change concrete: for a descriptor `s_load_dwordx8` at a dynamic
+address, write the eight dwords as **address lo/hi from the host view** plus **the rebuilt
+GFX10 fields** plus zeros for the rest, instead of refusing. The one thing to check before
+trusting it is that the shader does not feed those eight dwords back to the host as a descriptor
+(it would then need the console's own encoding, not ours).
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
