@@ -597,6 +597,33 @@ tree does not see at all, or it happens in frames the instruments never sample
 (a run with `VICTORY_CAPTURE_FRAMES` naming *every* frame of the first three
 seconds would settle that: 90 files, one hash each).
 
+### 2026-11-25 09:26: every frame of the opening, hashed — five pictures in a thousand
+
+One more pass on the reported frame regression, with `VICTORY_CAPTURE_FRAMES`
+naming **every** frame of the opening (1–140) plus the usual powers of two, on
+WARP, 20 s:
+
+```
+164 captures, 5 distinct files:
+  96 × 6,121 bytes     frames   1.. 96   one flat colour
+   4 × 30,298 bytes    frames  97..101   the first picture
+   1 × 34,244 bytes    frame  100        (its own value: one frame)
+  40 × 39,992 bytes    frames 102..256   held
+  23 × 17,998 bytes    frames 144..1024  held
+```
+
+So the presented picture changes five times in the first thousand frames and is
+constant for tens of frames at each step. There is no per-frame change anywhere
+in it — which is the strongest form of the earlier finding: **this swap chain
+cannot be where a frame that "goes back" is seen**, because nothing advances
+frame to frame on it. The animation the report describes is drawn somewhere
+this tree's `present()` never copies, and that is the question to answer next.
+Candidates, in order: a second window the title creates (`CreateWindowExW` is
+HLE'd, `lifecycle.rs`), the frame before `Host::presenter` made its swap chain,
+or a surface presented by a path with no HLE at all. Screen capture of the
+flip-model swap chain comes back black, so window enumeration (which HWNDs the
+title owns, and their sizes) is the cheap next probe rather than another run.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
