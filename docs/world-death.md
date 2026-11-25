@@ -1066,3 +1066,23 @@ which is what makes the difference between "watchable at 3 fps" and "one frame a
 So the next question about the heap pass is not how to make it cheaper but **which budget is right
 for a cutscene** — 64 MB is the next point to measure, with a capture at the same frame numbers to
 make sure the pictures still arrive in time.
+
+## 64 MB of staging a frame: the cutscene in full, textures in place
+
+`VICTORY_TEXTURE_STAGE_MB=64`, same run:
+
+```
+1.4 fps, 703.0 ms (preparing 343.1: copies 70.5 ms 190.7 MB, textures 216.7 ms 7.3 MB;
+  GPU 67.7 ms; copy-back 151.4 ms 98.6 MB), 1860 draws, heap buffers 1.0 passes 498.8 ms
+1.1 fps, 897.9 ms (preparing 491.4: copies 62.4 ms 214.6 MB, textures 393.6 ms 8.0 MB;
+  GPU 78.2 ms; copy-back 141.1 ms 102.1 MB), 1247 draws, heap buffers 0.5 passes 139.1 ms
+```
+
+and the pictures are there: frame 5000 (1,136,041 bytes) and **frame 5500 (2,371,443 bytes) — a
+rooftop party in the sunset, a dozen characters, a railing, a greenhouse, a table with drinks,
+plants on the right, drawn sharp and letterboxed**. The staging budget is not starving the
+cutscene at 64 MB.
+
+So of the three budgets measured — 192 MB (heap 420.8 ms), 64 MB (139–499 ms), 32 MB (111–224 ms,
+one frame at 3.1 fps) — 64 MB is the one that keeps the pictures whole while halving the pass; 32 MB
+is the one to try next for speed, with the same capture at 5500 as the check.
