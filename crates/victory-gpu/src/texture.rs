@@ -1010,6 +1010,25 @@ impl Staging {
     /// since the last time (and is mapped at all).
     pub(crate) fn refresh(&self) {
         use std::sync::atomic::Ordering::Relaxed;
+        // `VICTORY_TEXTURE_REFRESH_EVERY`: a texture is read once every N
+        // frames at most, round-robin, instead of every frame. The story
+        // asks for about 24,000 refreshes and 24.8 GB of title memory a
+        // frame; spreading them costs at most N frames of staleness per
+        // texture and divides the cost (docs/world-death.md).
+        if let Some(every) = std::env::var_os("VICTORY_TEXTURE_REFRESH_EVERY")
+            .and_then(|v| v.to_string_lossy().trim().parse::<u64>().ok())
+            .filter(|n| *n > 1)
+        {
+            // Round-robin by the texture's own address, so the frames divide
+            // the work evenly instead of one frame taking all of it.
+            let phase = ((self.memory as usize) >> 16) as u64 % every;
+            if crate::frame::current() % every != phase {
+                REFRESH_ASKED.fetch_add(1, Relaxed);
+                #[cfg(feature = "diagnostics")]
+                count_refresh_skipped();
+                return;
+            }
+        }
         let started = std::time::Instant::now();
         let read = self.refresh_now();
         let preparing = &crate::host::PREPARING;
