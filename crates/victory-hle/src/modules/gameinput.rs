@@ -830,7 +830,7 @@ fn forget(this: This, token: u64) {
 extern "system" fn stop_callback(this: This, token: u64) {
     forget(this, token);
 }
-/// Stops the callback, then waits up to `timeout` 碌s for a call of it that
+/// Stops the callback, then waits up to `timeout` 纰宻 for a call of it that
 /// is running; false on time-out, or from inside that callback (it cannot
 /// wait for itself), as documented. Either way it is never called again.
 extern "system" fn unregister_callback(this: This, token: u64, timeout: u64) -> bool {
@@ -1190,7 +1190,7 @@ mod host {
                     }
                 }
                 // `VICTORY_PAD_TRACE=1`: once a second, what the scripted keys
-                // put on the first pad — the question being whether a title
+                // put on the first pad 鈥?the question being whether a title
                 // that ignores the keys on one adapter ever sees them at all.
                 pad_trace(pressed);
             }
@@ -1200,6 +1200,10 @@ mod host {
         fn keys(&mut self) -> Vec<KeyState> {
             #[cfg(feature = "diagnostics")]
             let mut down = scripted();
+            #[cfg(feature = "diagnostics")]
+            if std::env::var_os("VICTORY_PAD_TRACE").is_some() {
+                keys_trace(focused(), down.len());
+            }
             #[cfg(not(feature = "diagnostics"))]
             let mut down = Vec::new();
             if focused() {
@@ -1234,8 +1238,40 @@ mod host {
         }
     }
 
-    /// `VICTORY_PAD_TRACE=1`: how often anything asked for scripted keys, and how
-/// many were live — the question being whether a title that ignores them ever
+    /// `VICTORY_PAD_TRACE=1`: once a second, whether our window is the foreground
+/// one and how many scripted keys the keyboard device was given — the two
+/// facts that differ between an adapter whose menus move and one whose do not.
+#[cfg(feature = "diagnostics")]
+fn keys_trace(focused: bool, scripted: usize) {
+    use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+    static LAST: AtomicU32 = AtomicU32::new(0);
+    static CALLS: AtomicU64 = AtomicU64::new(0);
+    static FOCUSED: AtomicU64 = AtomicU64::new(0);
+    static KEYS: AtomicU64 = AtomicU64::new(0);
+    CALLS.fetch_add(1, Ordering::Relaxed);
+    if focused {
+        FOCUSED.fetch_add(1, Ordering::Relaxed);
+    }
+    if scripted > 0 {
+        KEYS.fetch_add(scripted as u64, Ordering::Relaxed);
+    }
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(std::time::Instant::now);
+    let secs = start.elapsed().as_secs() as u32;
+    if secs > LAST.load(Ordering::Relaxed) {
+        LAST.store(secs, Ordering::Relaxed);
+        tracing::info!(
+            second = secs,
+            calls = CALLS.load(Ordering::Relaxed),
+            focused_calls = FOCUSED.load(Ordering::Relaxed),
+            scripted_keys = KEYS.load(Ordering::Relaxed),
+            "the keyboard device: focus and scripted keys"
+        );
+    }
+}
+
+/// `VICTORY_PAD_TRACE=1`: how often anything asked for scripted keys, and how
+/// many were live 鈥?the question being whether a title that ignores them ever
 /// asks at all.
 static SCRIPTED_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static SCRIPTED_KEYS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

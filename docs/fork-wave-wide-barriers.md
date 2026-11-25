@@ -1256,3 +1256,23 @@ move, while the identical script on WARP walks the whole flow. The remaining dif
 the consumer side of the keyboard device — next instrument is `focused()` and the per-second
 call count of `keys()` on both adapters, because the one thing that code gates on is whether
 our window is the foreground one.
+
+### 2026-11-25 11:15: focus and key delivery are identical on both adapters
+
+`VICTORY_PAD_TRACE=1` now also logs, once a second, whether our window is the foreground one
+and how many scripted keys the keyboard device was handed. 65 s each, same recipe:
+
+| adapter | keyboard calls a second | of those focused | scripted keys by 60 s |
+|---|---|---|---|
+| RTX 4080 SUPER | ~120 | ~119 | **211** |
+| WARP | ~74 | ~73 | **126** |
+
+So on the card the window *is* the foreground one, the keyboard device is polled more often
+than on WARP, and it is handed *more* scripted key states — and its menus still do not move,
+while WARP's walk the whole flow. Focus and delivery are both ruled out.
+
+That leaves the title's own UI: with the same key states on the same code, one adapter's menus
+accept them and the other's do not. The next things worth looking at are not in this layer's
+input code at all — the window's style (the card's run may be exclusive or borderless while
+WARP's is windowed) and whether the menus respond to anything else (a mouse click that our
+keyboard stand-in cannot produce).
