@@ -829,3 +829,37 @@ So the world path on the software adapter is roughly 3x faster than it was two h
 survives five minutes. The three-frame picture cycle measured earlier was on the pre-merge
 tree at 9 fps on the loading screen; whether it still holds at 5鈥?4 fps is the next thing to
 re-measure, with the same one-hash-per-frame method.
+
+### 2026-11-25 10:05: upstream's copy-back rewrite is not needed here — ours already costs 0.16 ms
+
+Upstream `cd94d35` (`view_marks`) exists because, on their tree, the world snapshotted
+**2.8–4.5 GB a frame** before each submission and compared it after: 98 % unchanged, and
+**0.45–0.7 s of a 1.5–1.7 s intro-cutscene frame**. The same counter, on this branch, in the
+seeded world path at 39–47 draws a frame:
+
+```
+copies per frame: 4.0 submissions; 49 title copies 0.0 MB; 43 refreshes 338.4 MB, 0 skipped;
+12 watches 0.13 ms, 161.9 MB checked, 161.2 MB unchanged
+```
+
+**161.9 MB, 0.13–0.16 ms.** Three orders of magnitude off upstream's problem, and 99.6 %
+unchanged rather than 98 %. Whatever narrowing this lineage already does, the cost that
+motivated `view_marks` is not in this tree.
+
+Porting it would also be a rewrite, not a patch: against the commit's parent, our copies of
+the files it touches differ by thousands of lines —
+
+| file | changed by the commit | our copy vs its parent (added / removed) |
+|---|---|---|
+| `victory-shader/src/emit/lower.rs` | +126 | 4,904 / 3,852 |
+| `victory-gpu/src/host.rs` | 32 | 4,743 / 1,087 |
+| `victory-gpu/src/shadow.rs` | +377 | 2,818 / 778 |
+| `victory-gpu/src/draw.rs` | 70 | 1,795 / 1,388 |
+| `victory-gpu/src/descriptor/host.rs` | 72 | 1,679 / 654 |
+
+and five of its test files do not exist here at all.
+
+**Decision: do not port.** Watch `fxceless/victory-fork` instead — that fork's history is
+literally "take this branch of that fork as one commit", and when it absorbs `cd94d35` the
+merge is theirs to make. The one thing worth taking from upstream is whatever it does that
+this tree still does slowly, and by these counters the copy-back is not it.
