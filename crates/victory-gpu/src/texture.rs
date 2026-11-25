@@ -763,12 +763,12 @@ impl Staging {
         // asks for about 24,000 refreshes and 24.8 GB of title memory a
         // frame; spreading them costs at most N frames of staleness per
         // texture and divides the cost (docs/world-death.md).
-        if let Some(every) = std::env::var_os("VICTORY_TEXTURE_REFRESH_EVERY")
+        let every = std::env::var_os("VICTORY_TEXTURE_REFRESH_EVERY")
             .and_then(|v| v.to_string_lossy().trim().parse::<u64>().ok())
-            .filter(|n| *n > 1)
-        {
-            // Round-robin by the texture's own address, so the frames divide
-            // the work evenly instead of one frame taking all of it.
+            // `VICTORY_FAST=1` and no explicit stride: once every eight frames.
+            .or_else(|| std::env::var_os("VICTORY_FAST").is_some().then_some(8))
+            .filter(|n| *n > 1);
+        if let Some(every) = every {
             let phase = ((self.memory as usize) >> 16) as u64 % every;
             if crate::frame::current() % every != phase {
                 REFRESH_ASKED.fetch_add(1, Relaxed);
@@ -880,7 +880,12 @@ impl Staging {
         }
         // File-backed memory has no write-watch either: four spots of it are
         // fingerprinted instead, and an unchanged one skips the read.
-        if std::env::var_os("VICTORY_TEXTURE_SAMPLE_SKIP").is_some() {
+        // `VICTORY_FAST=1` turns on the two switches the story was measured
+        // with (docs/world-death.md): the sample skip here, and the refresh
+        // stride below.
+        if std::env::var_os("VICTORY_TEXTURE_SAMPLE_SKIP").is_some()
+            || std::env::var_os("VICTORY_FAST").is_some()
+        {
             let mut spots = [0u8; 4 * 64];
             let last_at = size.saturating_sub(64);
             let mut got = 0usize;

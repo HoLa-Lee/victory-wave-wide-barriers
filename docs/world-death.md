@@ -797,3 +797,20 @@ a frame against 10–18 with the stride alone** — but it does not beat the str
 the walk it must run costs about as much as the detiling it saves. **The stride plus the sample
 skip is the configuration to run the story with today**; the written-only path is the one to keep
 for later, when the walk is cheap enough to make fresh content free.
+
+## One switch for the configuration: `VICTORY_FAST=1`
+
+`VICTORY_FAST=1` turns on the sample skip and sets the refresh stride to eight frames (an explicit
+`VICTORY_TEXTURE_REFRESH_EVERY` still wins). Card, story, the usual choreography:
+
+```
+1.2–2.4 fps, 415.7–836.1 ms (preparing 356.5–788.0: copies 28.0–35.5 ms 83.8–107.0 MB,
+  textures 249.9–701.9 ms 3.9–5.1 MB; GPU 20.3–30.4 ms; copy-back 93.4–101.8 ms), …
+capture at frame 2048: 4,111,935 bytes — the key art, complete
+```
+
+Story-phase medians (500+ draws): **1,298 ms a frame, textures 191 ms moving 9 MB, 3,532 draws**.
+
+So this is the line to quote from now on: `VICTORY_FAST=1` plus `tools/drive_card.ps1` runs the
+story on the card at a frame every 0.4–1.3 s with the picture right, and every other switch in
+this document is either a diagnostic or a step towards doing better than that.
