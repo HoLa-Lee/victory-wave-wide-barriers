@@ -940,6 +940,52 @@ If it holds, the change itself is cheap: an indirect record whose arguments are 
 asks for no work, so not issuing it is not a shortcut but the same command — and it
 removes whatever the empty `ExecuteIndirect` does to WARP.
 
+### 2026-11-25 12:30: the empty record is not a stray — skipping it crashes the title instead
+
+The section above read "no device removal" as the switch saving the world. It was not:
+the title **crashed** (Breakpad minidump, `victory-<time>.crash.log` in the data folder's
+`temp\`), which is a different ending, not a survival. Both arms that skipped anything
+crashed, and the shape is the same in both:
+
+| run | switch | skips (debug) | ending | crash log |
+|---|---|---|---|---|
+| skipempty, 260 s | on | 1,164 at 04:07:57–59 | title crash 04:08:31 | `Frame: 872`, `0h:2m:51s`, `fbk_stry000_FBK_STRY000_INTRO`, TileHeap 3,571/6,236 MB, 555 streaming requests |
+| skipLong, 380 s | on | (info level: not printed) | title crash 04:14:10 | `Frame: 913`, `0h:3m:6s`, same SRL |
+| skipOffLong, 380 s | off | — | device removed at 105 s | — |
+
+So at about world frame 870–910 the title issues ~1,164 indirect records whose five
+argument dwords read as zeros from **title memory**, and the spot is fatal either way:
+executing them removes the device, and not executing them takes the title down a moment
+later in the intro mission's prestream. An empty record that the title cannot live
+without is not an empty record at all — it is one whose arguments are not where we read
+them.
+
+**The likely reason is that we read the wrong copy.** `draw.rs`'s note (and this
+switch's check) reads the five dwords with `host::read_into`, which is *title memory* —
+the host's copy of it. A record a compute pass wrote in an earlier submission has its
+real bytes in the card's copy until that copy lands back; the host's copy still holds
+what it held before, which is zeros. Executing the record uses whatever the card has;
+skipping it uses our zeros. If that is the shape, then the numbers in the `args [0, 0,
+0, 0, 0]` line of 12:00 are a reading of the host copy, not of the record, and the
+dispatch that kills WARP is a *real* mesh dispatch — with group counts we never looked
+at.
+
+What settles it, in this order:
+
+1. Log both copies for the same record: `host::read_into` (host) against the shadow's
+   landed bytes (`Shadow`'s last landed copy). If host says zeros and the shadow's
+   landed copy says otherwise, the record is GPU-written and the host read is stale.
+2. If it is, read the record from the landed copy (or clamp it as the window pass does)
+   and note the three group words the host signature will actually execute with.
+
+`VICTORY_SKIP_EMPTY_INDIRECT` stays, default off: it is now a probe for exactly this
+question ("does not executing the record crash the title?"), not a candidate fix, and it
+only fires when there is no count buffer and the record's host copy is all zeros.
+
+The control arm is worth one more sentence of its own: `skipOffLong` died with a stack
+inside the software adapter itself (`d3d10warp.dll+0x2fa0e8`, `+0xa5d34`, `+0xa5b18`), so
+the removal happens in WARP's own code, which agrees with 12:00's "not an API misuse".
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the

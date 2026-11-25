@@ -3032,10 +3032,16 @@ impl State {
                 kind == DISPATCH,
             )
         });
-        // An empty record asks for no work: see `skip_empty_records`.
-        if skip_empty_records() && arguments_are_empty(arguments as *const u8) {
+        // An empty record asks for no work: see `skip_empty_records`. Only
+        // without a count buffer is one record the whole call (`max` records,
+        // the first of them read here): with a count the buffer decides how
+        // many, and the ones past the first are not read.
+        if skip_empty_records() && counter.is_none() && arguments_are_empty(arguments as *const u8) {
             crate::indirect::done(list, &bounded);
-            EMPTY_SKIPPED.fetch_add(1, Ordering::Relaxed);
+            let skipped = EMPTY_SKIPPED.fetch_add(1, Ordering::Relaxed) + 1;
+            if skipped % 256 == 1 {
+                tracing::info!(kind, skipped, "indirect records with no arguments were not executed");
+            }
             tracing::debug!(kind, at = ?arguments, "an indirect record with no arguments was not executed");
             return true;
         }
