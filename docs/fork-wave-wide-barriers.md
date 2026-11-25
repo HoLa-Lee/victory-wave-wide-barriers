@@ -1612,3 +1612,31 @@ from run to run, so the address moves with the title's own layout).
 
 The switch stays in the tree, off by default, as the instrument for the next look; what it just
 ruled out is worth as much as a fix.
+
+### 2026-11-25 13:05: a death with nothing in flight — the record is not always the call
+
+A fifth reproduction of the world's death, same choreography, with the record's neighbourhood
+now dumped (32 bytes before and after an all-zero argument record):
+
+```
+host GPU device removed after 1 submissions sent ahead (VICTORY_RELAY=1) of 0 lists;
+breadcrumbs (done/count, list) []; device removed: … (0x887A0005); a diagnostics build with
+VICTORY_D3D12_DEBUG=1 names the command
+```
+
+**Zero lists in that submission, reason `0x887A0005` ("the GPU device instance has been
+suspended"), no command named** — because there was nothing in flight to name. So the world does
+not always die *on* a call: here it died between two submissions, which means a fault from an
+earlier submission surfaced later (or the driver gave up on the card on its own).
+
+That weakens the "the empty indirect record is the call it dies on" reading — two arms without a
+removal (the other session's and this report's 660 s one) against four arms with one is
+suggestive, not proof, and this new signature shows the removal is not tied to a single command.
+The neighbourhood dump itself was never exercised: no all-zero record was the last op in this
+run, so "was the buffer empty or only this offset" is still open.
+
+Two things to do next, in this order: repeat the `VICTORY_SKIP_EMPTY_INDIRECT=1` arm to the same
+length as the failing ones (it survived 660 s once and then the *title* crashed at 251 s, so the
+arm needs a second and third run), and run a death with `VICTORY_D3D12_DEBUG=1` now that the
+debug layer exists — the failure text names that switch and this is the first build where it can
+do anything.
