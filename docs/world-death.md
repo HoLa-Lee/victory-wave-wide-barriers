@@ -137,3 +137,29 @@ error branch".
 Next: disassemble the caller `+0x2215c35` and the thread entry `+0x2215eca` — the branch before
 the trap is where the title formats whatever it was unhappy about, and a string reference there
 names the missing thing far more cheaply than another GPU-side run.
+
+## How to read the title's crash sites
+
+`tools/disasm_rva.py <rva-hex> [count]` disassembles the cached image at an RVA (mapping it
+through the PE section table, starting from the nearest `cc cc` padding) and prints every
+RIP-relative reference with the string it points at. It needs `capstone`
+(`python -m pip install capstone`).
+
+What it shows around this crash:
+
+```
+0x2215ea0  push rsi / sub rsp,0x20 / mov rax,[rcx+0x10]
+0x2215ebf  call 0x43a42e0
+0x2215ec4  mov  rcx,[rsi+8]
+0x2215ec8  call qword ptr [rsi]        <- the crashing work is reached through a function pointer
+0x2215eca  ...                          (frame #2: the return address of that call)
+```
+
+and frame #1 (`0x2215c35`) sits in a routine that begins `c7 04 25 00 00 00 00 00 00 00 00 cc` —
+the same "write to address zero, then `int3`" idiom as the trap itself. So the stack does not pass
+through a formatter that names its complaint: the title goes from a function pointer straight into
+its fatal path.
+
+`0xd421` is the marker the fatal path stores. Finding the branch that reaches it is a matter of
+following the function pointer at `[rsi]` and the two calls the thread entry makes
+(`0x22160b0`, `0x2216160`), which is the next disassembly job rather than another run.
