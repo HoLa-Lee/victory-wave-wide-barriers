@@ -1025,6 +1025,37 @@ number next to it, not a conclusion.
 The probe that came with this run (`args … pending_writes=…`, commit `da6538f`) answered
 nothing because no indirect op was reached; it stays for the runs that do reach one.
 
+### 2026-11-25 13:50: what the process was holding when the device went, and the correction to the million blocks
+
+The removal context now appends this process's own memory (`host::process_memory`), and the
+first run with it answers the question the 12:50 section left open. Default switches,
+seeded folder, WARP, nothing else set, world opens 05:34:54, removal at 05:36:33:
+
+```
+when the host device went: the submitting thread was between submissions, of 0 lists,
+for 135.2 ms; … objects let go at once 1658 and after a running submission 1324;
+submissions started 4317 finished 4316;
+process memory: working set 18644 MB (peak 20351), page file 21578 MB (peak 21578)
+```
+
+**18.6 GB resident, 21.6 GB committed, at the moment of the removal** — and the machine is
+not the limit: 31.8 GB of RAM, a 32 GB page file, a **63.8 GB commit limit with 33.9 GB of
+it free**. So the world does not die because the machine ran out; a 4 MB allocation failing
+inside WARP at 17.8 GB of free RAM and 33.9 GB of free commit is a **budget of WARP's own**,
+not the system's. That is the number the "resource running out" hypothesis needed, and it
+points away from the system heap and at the adapter.
+
+**Correction to the 12:50 section.** The "991,228 blocks" it called host resources are the
+**Rust heap**: `copystat`'s `Counting` allocator stands in front of the system heap in
+diagnostics builds, and the line says so ("Our own is the Rust code of every crate in the
+process"). Small uploads being pooled would not have moved that number. The arm it came from
+had **zero** `E_OUTOFMEMORY` lines, so it is not the trap arm's artefact either — it is
+simply the wrong counter for the question.
+
+What follows: the death line should carry the layer's own holdings — the bytes of host
+textures, host buffers and staging we keep alive — because those are what a WARP budget
+would be spent on, and the frame line's "our own allocations" cannot see them.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
