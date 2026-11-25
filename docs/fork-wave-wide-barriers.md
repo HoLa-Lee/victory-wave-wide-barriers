@@ -450,6 +450,50 @@ wall is the world's first frames, and it is now reproducible without the card:
 Nothing here says the card does the same; the card run of this branch has not
 been taken past the menus yet.
 
+### 2026-11-25 09:06: the present that can be one frame old, and what it costs to fence it
+
+A reported defect: the opening animation shows a frame that has gone back, not a
+fade. The candidate mechanism is the present path — `late_free_present()`
+(`VICTORY_RELAY=1`, `VICTORY_LATE_WAIT=3`) issues the back-buffer copy as a
+flight of its own and calls `Present` with no fence, so if the frame's sync has
+not landed the copy reads an older picture.
+
+**The mechanism is off in a default run, and measurably so.** `late_stage()` is
+`0` unless `VICTORY_LATE_WAIT` is 1/2/3 or `VICTORY_RELAY` is 1/2, so removing
+those variables changes nothing. `VICTORY_PRESENT_TRACE=1` now logs, at every
+present, what the card had run (`submitted`, `completed`, `behind`) and whether
+the copy went out as a flight:
+
+| run (RTX 4080 SUPER, the menus, 25 s) | presents | copy sent ahead | `behind` at present |
+|---|---|---|---|
+| default | 685 | 0 | **0 every time** |
+| `VICTORY_RELAY=1` | 672 | **672** | 1–2, never 0 |
+| `VICTORY_RELAY=1 VICTORY_PRESENT_FENCE=1` | 683–695 | 0 | **0 every time** |
+
+So: in the default configuration the present is synchronous — the copy is
+submitted through `execute`, which settles the flights and waits for the card,
+and only then is `Present` called; there is no way for it to show an older
+picture. With `VICTORY_RELAY=1` the precondition the report describes is real
+and constant: every present is issued with the card still one submission
+behind. Refreshes are `174–187 MB` a frame with **`0 skipped`** in both arms,
+so no refresh was deferred in either.
+
+**The cheap half of the fix is in**: `VICTORY_PRESENT_FENCE=1` makes a present a
+settle point again even at stage 3 (`present()` takes the synchronous branch).
+On this machine it costs nothing — 683–695 presents in 25 s with the fence
+against 672 without, both ~27 fps — and it removes the "present one submission
+behind" state entirely. It is off by default so the runs that measure
+`VICTORY_RELAY`'s pipelining keep their shape; the world, where that pipelining
+is worth 3–6 s/frame, is where its cost has to be measured.
+
+What this does not settle: the animation's frames are not in the captured swap
+chain (`VICTORY_CAPTURE` frames 1–64 are a flat colour), so whether the
+regression is this path can only be answered by the same three arms above with a
+person watching the animation — default, `VICTORY_RELAY=1`, and
+`VICTORY_RELAY=1 VICTORY_PRESENT_FENCE=1`. If it comes back in the *default*
+run, it is not this path: the candidates left are the shadow refresh
+(`0 skipped` says it is not deferring) and the title's own double buffering.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
