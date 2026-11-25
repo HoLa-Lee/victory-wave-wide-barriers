@@ -544,3 +544,12 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 2. `FIND-9`：`31714de` 若没别的路径进 main，就是 `main` 上两个 NVIDIA 测试红的唯一原因——可主动提这个 port，或等 fxceless 合
 3. `NEW-20`：现在有了卡侧立足点——**卡上的 compute 拒绝也是 wave64**；下一步该在卡上验 paired-wave64（#854 类）能否把那 6 个管线跑起来
 4. 回拷（124–200 ms / 55–82 MB）仍是帧里最大项；`GPU-SNAPSHOT-COST`/PR #1681 是 @avt0m4t48 的地盘，别重复
+
+### 19.8 追加（05:05）：PR #2790 重做成干净 diff + 一条新规矩
+
+- 第一次推的 #2790 是 **+67,983/−1,808**、`mergeable=False`：因为分支从**我们的 main（含 fxceless 合并）**切出，PR 的 base 却是 Marvisak main —— 整个合并都算进了 diff
+- 重做：`git fetch marvisak main`（新增 remote `marvisak`）→ 从 `13f91ca` 重切分支 → 手工把改动重打在 **Marvisak 版**的 `pipeline/host.rs` 上（那一版没有 `dxc`/`host()` 测试脚手架，所以 PR 只带**状态测试**，设备级的前后对照写进正文）
+- 现在：**1 文件 +107/−3，head `f00d527`，`mergeable=True`**
+- ⚠️ **新规矩**：给 **Marvisak/VIctory** 的 PR，分支必须从 `marvisak/main` 切；从我们的 main 切会把 36b1207 那次合并卷进去。给 **fxceless/victory-fork** 的 PR（如 #1098）才从 fork 线切
+- 卡上二进制仍是 pr-blend 旧树编的（`victory.exe.blendfix`，含同一份修复 + 设备测试），行为与 PR 里的代码一致
+- Marvisak main 上的测试结果：`197 passed / 2 failed / 1 ignored`，**2 failed 就是 FIND-9 那两个**（main 没有 `31714de` 的 clamp），与本改动无关
