@@ -515,3 +515,27 @@ cheap, repeatable runs, but the world's correctness cannot be judged there at al
 For the fork's own notes: emulating wave64 on a wave4/wave32 device means splitting each wave
 intrinsic across two waves with groupshared memory — a compiler feature, not a switch, and worth
 it only if someone needs the WARP world specifically.
+
+## Where the card's story stands after the skip: 0.1–0.4 fps, and the refreshes are the frame
+
+Three frame lines from one story run with `VICTORY_TEXTURE_SAMPLE_SKIP=1`:
+
+```
+0.4 fps, 2333.8 ms (1008.6 preparing: textures 917.4 ms 278.5 MB; 163.4 on the GPU; 213.0 back 67.5 MB), 5684 draws
+0.1 fps, 6906.0 ms (6364.5 preparing: textures 6255.7 ms 830.0 MB; 134.9 on the GPU; 348.4 back 95.4 MB), 6564 draws
+0.3 fps, 3241.4 ms (2893.0 preparing: textures 2795.2 ms 660.8 MB; 73.7 on the GPU; 163.9 back 61.6 MB), 5591 draws
+```
+
+`dropped … without a host pipeline` is 985–1512 a frame (the wave64 compute pipelines WARP cannot
+make do not appear on the card, but this run's drops are still there and are the next thing to
+name). The GPU does 74–163 ms of work; **2.8–6.3 seconds is this layer reading title memory for
+textures**. With the skip on, a texture whose four sampled spots are unchanged costs nothing —
+but during the story most textures *are* changing, because the title is streaming ten gigabytes
+of them in.
+
+So the remaining lever is not a cheaper read of all 24k textures; it is **not reading the ones the
+frame does not use**. The layer already collects, per frame, the textures whose slots were written
+(`Batch::texture_due`, then one write-watch asking for neighbouring copies), and it already
+computes which slots the draws actually read (the `readable`/`used` analysis in `draw.rs`). What
+is missing is the intersection: refresh what the frame reads, let the rest wait for the frame that
+reads them.
