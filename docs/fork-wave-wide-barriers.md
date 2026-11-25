@@ -1355,3 +1355,44 @@ means the loading packs opened, `story=0` means the menus were never finished, a
 all leaves even the loading packs unopened (`world=0`, 21 fps at the menus). Whoever next runs
 it should note the exact `VICTORY_KEYS` that reaches `pack\story000\story000.rpf` — that string is
 the missing piece, and without it the world's 80–180 s death cannot be reproduced on demand.
+
+### 2026-11-25 11:55: the world's death, reproduced with its address — and the keys that reach it
+
+The missing piece was the key choreography. This one reaches `story000` (seven packs open) and
+then the death, on WARP, seeded folder, DRED on, 250 s:
+
+```powershell
+# seven keys every 14 s, from 60 s: Up, Enter, Up, Enter, Down, Down, Enter
+$seq = @(); for ($t = 60; $t -le 240; $t += 14) {
+  $seq += "$t`:Up"; $seq += ("{0}:Enter" -f ($t+0.8)); $seq += ("{0}:Up" -f ($t+1.6))
+  $seq += ("{0}:Enter" -f ($t+2.4)); $seq += ("{0}:Down" -f ($t+3.2)); $seq += ("{0}:Down" -f ($t+4.0))
+  $seq += ("{0}:Enter" -f ($t+4.8)) }
+$env:VICTORY_KEYS = ($seq -join ",")
+```
+
+What the failure says, in full:
+
+```
+host GPU device removed after 1 submissions sent ahead (VICTORY_RELAY=1) of 8 lists;
+breadcrumbs (done/count, list) [];
+list 5 of 8, of its 35: indirect kind 10 max 1 at 0xd49401e00 [mesh 8563c39d693b36d0]
+  targets [] depth Some("0x1c526e938c0 2560x1440 f19") state [] scissor [0 0 2560 1440]
+  viewport [0 0 2560 1440 depth 0..1]
+  | 8563c39d693b36d0: u9=0x1e284a0 [heap 988197: null] u13=0x1000cc93 root3=0xcfc963b60 host Some(0x36e100163b60, 0x29c4a0)
+  tables ["… Srv s1+0: placed uav=false dim 1 752x1 f0 layout 0x1 at 0xcfc964800",
+          "… Srv s1+8: placed uav=false dim 1 128x1 f0 layout 0x1 at 0x26e688d0",
+          "… Cbv s1+16: Constant(0x26e69580, 480) [1.0, 0.0, 2.0663205e-7, 0.0]",
+          "… Srv s3+0: Descriptor", "… Cbv s4+0: Constants"]
+```
+
+So the device goes on an **indirect mesh item** (`kind 10`, `max 1`) whose argument structure sits
+at `0xd49401e00`, in the fifth of eight lists at its 35th command, with a 2560×1440 depth target
+(`f19` = `R32G8X24_TYPELESS`) and a root signature whose table 1 holds two placed SRVs and a
+constant buffer. That is the address the next probe reads: the five argument dwords at
+`0xd49401e00` as the record was issued. `indirect.rs` already clamps counts (draws, dispatches,
+mesh groups, and a per-dispatch budget), so the open question is whether this record's arguments
+were *written* at all — a freed or never-filled argument buffer would make the clamp read
+garbage and the card fault.
+
+Note also that the removal line still says `breadcrumbs (done/count, list) []` with DRED on, so
+DRED's breadcrumbs remain empty on this host even when the death is reproduced.
