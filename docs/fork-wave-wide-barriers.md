@@ -413,6 +413,43 @@ now in `644ebeb`) fixed it for 3080-class runs, and on this 4080 SUPER the
 `644ebeb` build still dies ~18 s in with `0x887A0001` and no breadcrumbs while
 this branch runs the same 40 s cleanly.
 
+### 2026-11-25 08:58: the first-run flow *does* finish — the keys were the wall
+
+The rows above say the flow never reaches saving. It reaches it, and this run
+walked it: **`Z:\settings\settings.xml` was written** (3,921 bytes,
+`rage__fwSystemSettingsCollection`, graphics and advancedGraphics sections),
+`xgamesave: create_container container=SettingsProfileSettings` and
+`create_update` were served, and the title went on to open
+`pack\story000_restofworld\story000_restofworld.rpf` — the world's data.
+
+What the earlier runs got wrong is the button mapping, not the title's storage
+path: `gameinput::FALLBACK_BUTTONS` has no entry for the letter `A`. The pad's
+`A` is **`Enter`** (`(0x0D, A)`), so a script of `...:A` presses nothing at all.
+A run that presses `A` sits on the setup pages forever and looks like a save
+that never happens.
+
+With `Enter` as `A`, `Down`/`Up` as themselves, the pages on the software
+adapter (WARP, 10–30 fps, ~60 s to the first page) go:
+
+| page | what got past it |
+|---|---|
+| loading star, then the loading art | — |
+| `LANGUAGE` (12 entries) | `Enter` (and `Down` first, if the run has been moving the selection) |
+| `LEGAL NOTICES`, Copyright/Photosensitivity list with `Next` | `Down`, `Down`, `Enter` |
+| Rockstar terms, two checkboxes and `Confirmar` (greyed until both) | `Up`, `Enter`, `Up`, `Enter`, `Down`, `Down`, `Enter` |
+| brightness | `Enter` |
+| "finish setup?" | `Enter` |
+
+Then the settings are written, `XGameSave` is asked for, and the world's data
+is opened. 4,200 frames in, the software adapter lost its device in the load —
+`0x887A0005` ("the GPU device instance has been suspended"), during host
+pipeline creation, 30 s after `story000_restofworld.rpf` was opened. So the next
+wall is the world's first frames, and it is now reproducible without the card:
+`VICTORY_KEYS` with `Enter` where this report used to write `A`.
+
+Nothing here says the card does the same; the card run of this branch has not
+been taken past the menus yet.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the

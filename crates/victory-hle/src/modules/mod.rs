@@ -1,4 +1,4 @@
-//! Implementations, one module per area of the console API.
+﻿//! Implementations, one module per area of the console API.
 //!
 //! Adding an API: write an `extern "system"` function named exactly like
 //! the import, then list it with `hle_export!` in the module's `module()`.
@@ -26,6 +26,7 @@ pub mod lifecycle;
 pub mod media;
 #[cfg(windows)]
 pub mod net;
+pub mod rpcrt4;
 pub mod speech;
 pub mod storage;
 pub mod xasync;
@@ -66,6 +67,7 @@ pub(crate) fn all() -> Vec<HleModule> {
     all.push(lifecycle::module());
     #[cfg(windows)]
     all.push(net::module());
+    all.push(rpcrt4::module());
     #[cfg(windows)]
     all.push(xmem::module());
     #[cfg(windows)]
