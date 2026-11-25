@@ -369,3 +369,28 @@ Together with the earlier arms this settles the shape of the problem: at that mo
 machine on WARP cannot give it (16–19 GB private, 1–7 GB free, then `0x887A0005`). The card has
 16 GB of VRAM — the one path that might fit — and its menus cannot yet be driven by scripted keys
 (see the input section above).
+
+## The card can be driven after all — with real keys, not the scripted pad
+
+Every card run before this one pressed `VICTORY_KEYS` and nothing moved. One run with **real
+keystrokes** (`keybd_event`, i.e. what a person's keyboard does) told a different story:
+
+```
+t≈50 s  Down, Down, Enter   (real)
+t≈65 s  Enter               (real)
+frames: 900/1024/1200 = the loading screen, 1500 transition,
+        1800 = 761 KB, 2048…2400 = the LANGUAGE page ("1 / 12", SELECT A)
+```
+
+**The card advanced.** So the tooling was the problem, not the title: scripted keys are produced
+(`scripted()` is polled ~120 times a second and `pressed` climbs with the script) and yet the
+card's menus ignore them, while real key events move them. `tools/drive_card.ps1` drives a run
+that way — it starts the title, keeps it in the foreground and taps keys on a schedule:
+
+```powershell
+.\tools\drive_card.ps1 -Tag card1 -Seconds 300 -Seed -Script "60:Enter,90:Down,92:Down,94:Enter,120:Enter"
+```
+
+With that in hand the card's world — the only place the story's ten gigabytes of texture copies
+have 16 GB of VRAM to land in — is reachable, which is what every previous section of this
+document said it was not.
