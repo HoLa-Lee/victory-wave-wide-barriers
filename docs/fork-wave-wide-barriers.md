@@ -1679,3 +1679,35 @@ length as the failing ones (it survived 660 s once and then the *title* crashed 
 arm needs a second and third run), and run a death with `VICTORY_D3D12_DEBUG=1` now that the
 debug layer exists — the failure text names that switch and this is the first build where it can
 do anything.
+
+### 2026-11-25 13:15: six reproductions, six different last commands, one invariant
+
+| # | switches | last command the report names | removal |
+|---|---|---|---|
+| 1 | DRED | indirect kind 10 at 0xd49401e00, mesh | yes, 18 s |
+| 2 | DRED | indirect kind 10 at 0xd49401d20, args [0,0,0,0,0], mesh | yes |
+| 3 | DRED | same shape, args [0,0,0,0,0], mesh | yes |
+| 4 | `GBV` | texture upload 0x279006de590 (128×128 f71 mips 6) sub 3 | yes |
+| 5 | DRED | **0 lists**, reason `0x887A0005`, no command | yes |
+| 6 | `DEBUG` | **mesh 1** (a direct mesh), depth 2560×1440 f19 | yes |
+
+and the two arms with `VICTORY_SKIP_EMPTY_INDIRECT=1` (no removal in either):
+
+| # | switches | what happened |
+|---|---|---|
+| A | skip, 660 s | story at 2 min 58 s, **title crashes** `0xc0000005 write 0x0` at `+0x23cf683` |
+| B | skip, 660 s | same story time, **same crash at the same address** |
+
+So: the last named command is never the same twice, but every arm that dies was doing **mesh work
+against a 2560×1440 `f19` (`R32G8X24_TYPELESS`) depth target**, and no arm produced a single
+validation message (`D3D12 ERROR` count 0 with the debug layer loaded and GBV on). Skipping the
+empty indirect records removes the removal **twice out of two**, and the title then crashes at the
+same address both times — so those records are load-bearing for the title, not spurious.
+
+The reading that fits all twelve runs: the arguments are **written by the GPU** (a compute pass)
+and this layer's copy of that buffer is a host shadow updated at copy-back, so at record time it
+still holds the previous submission's bytes — zeros on the first frames. The clamp then executes
+from a stale copy, and skipping it makes the title's own downstream logic run on data it never
+got. The fix that follows is not "skip" and not "refresh at submit": it is to read the indirect
+arguments from the card's memory when they are GPU-written, which is the one path this layer has
+never taken.
