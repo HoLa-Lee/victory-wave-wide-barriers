@@ -878,3 +878,22 @@ join, so it neither helps nor hurts. The copy-back line is the informative one �
 waited 40–45 ms "for fetch"), so the cost is latency per fetch, not size. That is the thing to
 measure next: how many fetches a frame makes and how long each waits, before any change to the
 copy-back itself.
+
+## Two things the logs say about the loop and about the sample skip
+
+**Without a seeded profile the title touches no storage at all** in 150 s: 60 `dstorage` opens,
+every one a `G:\…rpf` (appdata0, common, movies, shaders, anim, data, levels, navmeshes), and not a
+single path under `Z:\settings\`, `Z:\cloudpers\` or `Z:\cloudcache\`. So the "settings exist"
+check is exactly the file's existence — nothing else in those directories is consulted on the way
+in — and the loop back to the legal notices happens with **no storage warning or error logged** at
+all (279–302 warnings in the story runs, every one of them this:
+
+```
+a texture picked by index changed after its upload with nothing to tell of it: uploaded again
+slot=97069 address=0x78af58000 bytes=352256 frames_after_…
+```
+
+**which is the sample skip's own price**: a fingerprint of four spots per texture can miss a
+change, the layer notices later (its index-picked queue is re-checked) and uploads again. That is
+the staleness the switch trades for the 26× on the texture path, and it is visible in the log
+rather than silent — worth knowing when someone wonders why textures are uploaded twice.
