@@ -922,3 +922,34 @@ and five of its test files do not exist here at all.
 literally "take this branch of that fork as one commit", and when it absorbs `cd94d35` the
 merge is theirs to make. The one thing worth taking from upstream is whatever it does that
 this tree still does slowly, and by these counters the copy-back is not it.
+
+### 2026-11-25 10:12: joined by frame — the picture replays from three frames back in 130 of 149
+
+One run with both instruments on (seeded profile, `Enter` every 15 s, WARP, 120 s,
+`VICTORY_PRESENT_TRACE=1`, every frame 150–300 captured), joined by frame number:
+
+```
+206 89794D  host …9d0   title …f80
+207 13C50A  host …dd0   title …720
+208 5E208F  host …9d0   title …f80
+209 89794D  host …dd0   title …720     <- 206's picture, on the other texture
+210 13C50A  host …9d0   title …f80     <- 207's
+211 5E208F  host …dd0   title …720     <- 208's
+212 89794D  host …9d0   title …f80
+```
+
+Measured over the whole window: **130 of 149 comparable frames present the same picture as
+three frames earlier**; the set of pictures keeps changing (13C50A, 89794D, 5E208F, 427BF8,
+E3D561, 8FE7FB …), so this is not a three-frame loop the title plays on purpose — pictures
+that are new are interleaved with replays of older ones, which is exactly "it goes back a
+frame or two while it moves on".
+
+The two title resources and the two host copies stay one-to-one and alternate every present
+throughout (the table's `host`/`title` columns), so the replay is not a mix-up between
+buffers: each texture's own content moves on, and the *same* picture arrives on the other
+texture three frames later.
+
+That is the state to hand on: the replay is real, quantified, and reproduces in one 2-minute
+run with two switches; what is not yet known is which side re-delivers the older picture —
+the title's own copy between its two buffers, or this layer's copy into the host copy of the
+second one.
