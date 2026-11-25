@@ -583,3 +583,23 @@ reads that the stride does not cover.
 Those three are the next numbers to attack, and they are all "this layer moves memory the card
 could read itself": a copy the title did not change, a copy-back nobody asks for, and a refresh
 whose result is not read.
+
+## Seven minutes of story on the card, no removal, and 6.5 fps at the end
+
+A 420 s run with both switches (`SAMPLE_SKIP=1`, `REFRESH_EVERY=8`), the same key choreography,
+reached and held the story:
+
+```
+run 419.9 s   story packs 7   world packs 8   device removals 0   traps 0
+fps over the run: 2.0, 2.6, 1.6, 2.4, 6.2, 6.5     (ending: 153.7 ms a frame)
+dstorage: G:\pack\story000_bvh4\…, G:\pack\story000\story000… streaming in at 06:52
+```
+
+The frame line at the end: `6.5 fps, 153.7 ms (58.9 preparing: copies 32.4 ms 70.6 MB, textures
+0.7 ms; …)`. So on the real GPU the story runs, streams its packs, renders, and **does not lose the
+device for seven minutes** — the WARP death documented above is a WARP-and-host-memory story, not
+the title's.
+
+What is left for a playable frame is now a short list, in the frame line's own order: 70 MB of
+title copies a frame, the copy-back, the GPU's own 71–72 ms, and the draws (2,132–2,919 in the
+loading phases). The texture read that used to be 7 s of every frame is gone.
