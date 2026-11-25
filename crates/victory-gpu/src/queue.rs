@@ -1,4 +1,4 @@
-//! Command queues. Submitted lists run on the host GPU and are waited for,
+﻿//! Command queues. Submitted lists run on the host GPU and are waited for,
 //! so fence signals complete at once.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
@@ -828,7 +828,7 @@ extern "system" fn present(
         const COPY_SOURCE: u32 = 0x800;
         let state = crate::resource::host_transition(resource, COPY_SOURCE)
             .map_or(COPY_SOURCE, |(_, before)| before);
-        let shown = host.present(texture, state, frame);
+        let shown = host.present(texture, state, frame, resource as usize);
         crate::resource::host_transition(resource, state);
         #[cfg(feature = "diagnostics")]
         blinks(frame, resource, state, shown);
@@ -1076,8 +1076,8 @@ mod tests {
     fn newer_queues_have_their_methods_two_slots_later() {
         let (old, new) = (queue_table(false), queue_table(true));
         assert_eq!(old[10], new[10]); // submission stays at 0x50
-        assert_eq!(old[14], new[16]); // signal 0x70 → 0x80
-        assert_eq!(old[30], new[32]); // present 0xf0 → 0x100
+        assert_eq!(old[14], new[16]); // signal 0x70 鈫?0x80
+        assert_eq!(old[30], new[32]); // present 0xf0 鈫?0x100
         assert_eq!(new[35], execute_x as *const ()); // 0x118
     }
 

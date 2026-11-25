@@ -5996,7 +5996,7 @@ impl Host {
     /// Shows `texture`, which is in `state` (a host state) and stays in it,
     /// as frame `frame` (saved if captures are on). `None` if nothing was
     /// shown; else, in diagnostics builds, whether the frame was black.
-    pub(crate) fn present(&self, texture: &ID3D12Resource, state: u32, frame: u64) -> Option<bool> {
+    pub(crate) fn present(&self, texture: &ID3D12Resource, state: u32, frame: u64, at: usize) -> Option<bool> {
         // SAFETY: a live resource.
         let desc = unsafe { texture.GetDesc() };
         let Some(format) = swap_format(desc.Format) else {
@@ -6124,6 +6124,7 @@ impl Host {
                     // shows as three pointers taking turns, one pointer means
                     // the ring is inside the title or in the refresh cadence.
                     source = %format_args!("{:p}", texture.as_raw()),
+                    title_at = %format_args!("{:#x}", at),
                     "present"
                 );
             }
