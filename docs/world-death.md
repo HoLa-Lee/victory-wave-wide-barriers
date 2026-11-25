@@ -561,3 +561,25 @@ and 40–100 MB of copy-back being the next cost to look at.
 The price is staleness: a texture's screen content can lag by up to eight frames, which at 6 fps
 is about a second. That is a measurement switch, not a final policy — the policy the numbers point
 at is still "refresh what the frame reads", with the stride only as the fallback for the rest.
+
+## Under the stride the picture is intact, and the costs that remain are copies
+
+A verification run with both switches (`SAMPLE_SKIP=1`, `REFRESH_EVERY=8`), capturing through the
+story: frame 2048 is the story's key art, complete — no missing or stale textures, no corruption.
+
+```
+0.8 fps, 1283.9 ms (1061.7 preparing: copies 55.1 ms 112.0 MB, textures 976.6 ms 5.3 MB;
+  72.2 on the GPU; 88.3 copying back 33.1 MB), 2919 draws
+1.1 fps,  877.2 ms ( 211.2 preparing: copies 42.3 ms  91.4 MB, textures 142.3 ms 8.7 MB;
+  70.8 on the GPU; 85.4 copying back 33.6 MB), 2132 draws
+```
+
+So the fps in the story is **0.8–6.9 depending on the phase** (the fast lines were the lighter
+art screen at ~1,000 draws, these are 2,132–2,919 draws), and with the texture read gone the
+frame's remaining costs are, in order: **91–112 MB of title copies a frame (42–55 ms)**,
+**33 MB copied back (85–88 ms)**, **71–72 ms of GPU**, and 142–977 ms of the remaining texture
+reads that the stride does not cover.
+
+Those three are the next numbers to attack, and they are all "this layer moves memory the card
+could read itself": a copy the title did not change, a copy-back nobody asks for, and a refresh
+whose result is not read.
