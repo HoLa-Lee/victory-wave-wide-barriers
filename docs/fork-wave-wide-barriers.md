@@ -551,9 +551,24 @@ $env:VICTORY_DATA_DIR = "$PWD\vlogs\data-seed"; $env:VICTORY_D3D12_WARP = "1"
 .\target\diag\victory.exe run <game dir>\game_scarlett_master.exe --execute
 ```
 
-45 s of that on WARP (22.8 fps, 892 log lines at `files=debug`) stayed on the menus
-without a device loss; it had not opened `pack\story000_restofworld\story000_restofworld.rpf`
-yet, so the world is still the wall it was.
+240 s of that on WARP, a seeded folder and `Enter` every 15 s, **reaches the
+world**: `pack\core_restofworld001\core_restofworld001.rpf` opens at 01:12:25 and
+`pack\story000_restofworld\story000_restofworld.rpf` at 01:13:11, with no setup page
+and no key script for them. The world's frames then run at 1.6-1.8 fps (558-620 ms
+a frame; 130 `slow host submission` lines, the worst 1,484 ms, most of them carrying
+a compute pipeline beside the draws) and **WARP loses the device 82 s later**, at
+01:14:33, after 7 lists:
+
+```
+ERROR victory_gpu::draw: the host device went while buffer views of the heap were made
+WARN  victory_gpu::host: no shared buffer error=... (0x887A0005) size=4194304
+VIctory: host GPU failure: host GPU device removed after a submission of 7 lists; no breadcrumbs
+```
+
+So the wall past the menus is the submission that makes the world's buffer views:
+one line lists 104,139 heap slots, the whole heap is walked in one go, and the
+software adapter goes during it. A run that wants the world on the card has to be
+taken the same way — a seeded folder and `Enter`, no setup pages.
 
 ### What the three switches are
 
