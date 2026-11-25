@@ -1122,3 +1122,24 @@ not, in any run so far.
 
 So the world's cost on the software adapter is its rasterizer, and the card's world phase — at
 least up to the story packs, which this run did not reach — is not where it dies.
+
+### 2026-11-25 11:05: on the card that phase costs nothing at all
+
+Same card run as above, frame times as the layer reports them:
+
+```
+33.3 ms/frame = 0.5 ms preparing + 0.0 on the GPU    (22 draws, repeated)
+frame interval interval=33.333ms                      (the title's own 30 fps setting)
+```
+
+**0.0 ms of GPU work in a 33.3 ms budget.** The 30 fps is the title's `desiredFPS` wire, not the
+card's limit, and the 4K phase that costs the software adapter 615 ms costs this card nothing
+measurable. Whatever keeps the world from being fast on this machine, it is not the card being
+busy in this phase; and whatever lost the device on `70564ae` and `644ebeb` within 7–18 s of it
+is not happening in this build at all.
+
+The story packs were not reached on the card in that 100 s run (the menus take more presses
+there than on WARP), so everything above is the world's *loading* phase. The next step on this
+side is the same run with a longer key script, and the honest risk that comes with it: three
+reports in this repository have a card freezing hard in the world, so it stays a
+single-shot 2–3 minute run that gets checked for a living machine afterwards.
