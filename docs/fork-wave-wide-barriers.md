@@ -1,4 +1,4 @@
-# The wave-wide form takes the fence-only barrier mode
+﻿# The wave-wide form takes the fence-only barrier mode
 
 Status, 2026-11-25: the change is in the tree and its unit test passes; it has
 **not** yet been shown to fix the crash it targets, because the machine it was
@@ -55,7 +55,7 @@ keep their waits, so the LDS exchanges the form exists for still order.
 
 Cost: inside a wave-wide translation, a write and a read that a lane never
 reaches are no longer ordered against each other. That is the trade the form
-already makes elsewhere — it is the *approximate* form, and it only runs when
+already makes elsewhere 鈥?it is the *approximate* form, and it only runs when
 the exact forms and the deep-skip form both failed. A translation that computes
 a wrong value beats a card reset, and the mode is part of the shader cache key
 (`shader_cache::build` already hashes `group_sync()` and `VICTORY_WAVE_WIDE`),
@@ -82,20 +82,20 @@ did not exist) and pins the behaviour after it.
 
 Hardware: i5-12600KF, 32 GB, RTX 4080 SUPER (16 GB, driver 32.0.16.1742),
 Windows 11 26200. Dump: Series X, 208.62 GiB, executable BLAKE3
-`b99f876b74d4a77f03af5f878223b27bd647b5c35a79d5decd9f716504239e93` — the same
+`b99f876b74d4a77f03af5f878223b27bd647b5c35a79d5decd9f716504239e93` 鈥?the same
 build every report in this repository uses. Rust 1.98.1 (pinned), MSVC
 14.44.35207, SDK 10.0.26100.0.
 
 - `census` sees 18 images, 0 unreadable; `run` without `--execute` binds
   `game_scarlett_master.exe` at **88 hle, 427 host, 72 title, 0 missing**, and
-  the four title DLLs at 9/48, 4/18, 27/171 and 6/54, all 0 missing — the same
+  the four title DLLs at 9/48, 4/18, 27/171 and 6/54, all 0 missing 鈥?the same
   numbers as the report in the upstream repository's own issue.
 - The title boots and the first-run screens run at **30 fps, 33.3 ms/frame,
   38-61 draws/frame**, at 1920x1080, on the 4080 (the host's memory line
   reports a 15,277 MB budget, so the adapter is the card, not a virtual one).
 - Legal notices, the Rockstar terms page (two checkboxes, Confirm greyed out
   until both are ticked), the brightness calibration page, the "finish setup?"
-  page and the loading art all render correctly — text legible, selection
+  page and the loading art all render correctly 鈥?text legible, selection
   highlight correct, pad prompts drawn.
 - 2D is clean and there is no device loss on this path with or without the
   patch.
@@ -103,8 +103,7 @@ build every report in this repository uses. Rust 1.98.1 (pinned), MSVC
 ## What was not verified
 
 **The fix is unproven until a machine that reaches the world runs it.** This
-machine did not: scripted `VICTORY_KEYS` walked account picker → legal notices →
-terms → brightness → "finish setup?", and then the title came back to the legal
+machine did not: scripted `VICTORY_KEYS` walked account picker 鈫?legal notices 鈫?terms 鈫?brightness 鈫?"finish setup?", and then the title came back to the legal
 notices page instead of loading, on every attempt (9 runs, 60-160 s each, fresh
 `VICTORY_DATA_DIR`). Whether that is the profile write, the offline account, or
 the key sequence is not known yet, and it is the reason this change cannot claim
@@ -116,10 +115,10 @@ With `VICTORY_LOG` at debug for `victory_hle::modules`:
 
 - The title asks for the persistent-local-storage provider
   (`f4faf4d4-2d04-4fce-b3e0-474a713a3e84`) with the 2026 interface
-  (`41a4e10c-…`) and gets it; the calls are served, and the path it receives is
+  (`41a4e10c-鈥) and gets it; the calls are served, and the path it receives is
   a drive root as intended.
 - It then reaches `Z:\settings\`, `Z:\cloudpers\`, `Z:\cloudcache\` and
-  `Z:\cloudcache\*` — directories and one wildcard enumeration — and writes no
+  `Z:\cloudcache\*` 鈥?directories and one wildcard enumeration 鈥?and writes no
   file in any of them. `storage\settings`, `storage\cloudpers` and
   `storage\cloudcache` exist and stay empty; `saves\` gets a container
   directory (`0009000000000001\00000000-0000-0000-0000-00007952987a`) and nothing
@@ -128,7 +127,7 @@ With `VICTORY_LOG` at debug for `victory_hle::modules`:
   `victory-hle::modules::xgamesave` is reached at all; the container directory
   is made by something else. `XGameSaveSubmitUpdate` (the blocking form, 0xd8)
   was `missing` in this fork and is now implemented as the same commit the
-  async form runs — it changes nothing here, because nothing calls it.
+  async form runs 鈥?it changes nothing here, because nothing calls it.
 - The only file the title leaves behind is `temp\telemetrycache.dat`.
 
 So the setup is not committed, and the next boot is a first boot again. The
@@ -146,13 +145,13 @@ Z:\settings\      Z:\cloudpers\      Z:\cloudcache\      Z:\cloudcache\*
 ```
 
 Three directories and one wildcard enumeration. No `CreateFileW`, `CreateFile2`
-or CRT open of a file under any of them — so the configuration is not lost on
+or CRT open of a file under any of them 鈥?so the configuration is not lost on
 the way out, it is never asked to be written. `storage\settings`,
 `storage\cloudpers` and `storage\cloudcache` stay empty, and `saves\` gets one
 container directory with nothing in it.
 
 That moves the question one step earlier: what makes the flow decide there is
-nothing to save, or fail before it tries. Two candidates left — the
+nothing to save, or fail before it tries. Two candidates left 鈥?the
 persistent-local-storage quota the title reads (`storage::space`, 2048 MB from
 the manifest) and whatever `XPackage` answers while the flow runs (its provider
 is the second most asked one in the log).
@@ -160,7 +159,7 @@ is the second most asked one in the log).
 `XPackage` is not it: `xgameruntime::missing` warns with its area and slot on
 every call, and a whole run produces **no** "runtime method not implemented"
 line at all. So of the fifteen slots this fork leaves out there, the title
-calls none — it asks for the interface and then uses what is implemented.
+calls none 鈥?it asks for the interface and then uses what is implemented.
 
 The quota is not it either: `storage::space_info` and
 `storage::prompt_for_space` now log what they answer, and a whole first-run
@@ -173,7 +172,7 @@ Z:\settings\   Z:\cloudpers\   Z:\cloudcache\   Z:\cloudcache\*
 ```
 
 Three directories and one wildcard. It never asks about a file, never asks for
-room, and never submits a save. So the flow does not fail to save — **it never
+room, and never submits a save. So the flow does not fail to save 鈥?**it never
 reaches saving**. Whatever it reads in those three directories is what it
 decides on, and all three are empty on a fresh data folder.
 
@@ -199,7 +198,7 @@ That matters for this change in two ways. It makes it **safe**: on 26,084
 programs it alters nothing, because `widen` is not entered. And it makes it
 **unproven in a second sense**: whatever `VICTORY_WAVE_WIDE=1` does for #101,
 it is not visible from here. Either the report came from an older tree (this
-fork has since moved the cross-lane retry around — `#11` was taken out and put
+fork has since moved the cross-lane retry around 鈥?`#11` was taken out and put
 back twice in the last four commits), or the programs that need it only appear
 once the world loads, which this machine cannot reach. The run that settles it
 is the same one #101 describes, on a machine already in the world.
@@ -210,14 +209,14 @@ Upstream (`70564ae`), same dump, same binary:
 
 | adapter | rate | draws | device |
 |---|---|---|---|
-| RTX 4080 SUPER | 0.1–0.2 fps, 6,300–6,700 ms/frame | 2 | lost (reason `0x887A0001`; the `0x887A0004` in that line is the DRED query, see below) |
+| RTX 4080 SUPER | 0.1鈥?.2 fps, 6,300鈥?,700 ms/frame | 2 | lost (reason `0x887A0001`; the `0x887A0004` in that line is the DRED query, see below) |
 | WARP | 15 fps, 66.7 ms/frame | 21 | none; `crashes.log` never written |
 
 The card is **150x slower than the software adapter** and then dies, which is
 the opposite of what it should do. Two more facts narrow it:
 
 - With `VICTORY_D3D12_DRED=1` the breadcrumbs are **empty**
-  (`(done/count, list) []`), so no command list of ours faulted — the device
+  (`(done/count, list) []`), so no command list of ours faulted 鈥?the device
   goes while something is created or queried outside one.
 - `VICTORY_COPY_MODE=none` and `plain` both still lose it, so the per-frame
   copy of title memory is not the trigger. `VICTORY_D3D12_DEBUG=1` prints
@@ -240,7 +239,7 @@ enabled**: `removal_data` (`host.rs`) asks for breadcrumbs only after
 So the line
 
 ```
-host GPU device removed after a submission of 1 lists; no breadcrumbs (… 0x887A0004); device removed: … 0x887A0001
+host GPU device removed after a submission of 1 lists; no breadcrumbs (鈥?0x887A0004); device removed: 鈥?0x887A0001
 ```
 
 says *this run had no DRED*, and the removal's own reason is the second
@@ -254,7 +253,7 @@ A 40-second run of the first-run flow on the card, the same on WARP, and a
 40-second card run with `VICTORY_WAVE_WIDE=1` produce **zero** of those lines:
 the title does not call `CheckFeatureSupport` at all on this path. The host's
 own capability asks are the wave lanes (below) and, when a mesh pipeline is
-made, mesh tier at shader model 6.6 — and `mesh_shaders()` is never called
+made, mesh tier at shader model 6.6 鈥?and `mesh_shaders()` is never called
 either. There is no query whose answer differs to blame.
 
 **The card's device loss belongs to `70564ae`, not to this tree.** Same dump,
@@ -263,17 +262,17 @@ same card, same menus, same `diag` build settings, fresh data folder, DRED on,
 
 | tree | adapter | rate | draws | view heap (title slots / host slots) | wave lanes | device |
 |---|---|---|---|---|---|---|
-| `70564ae` (upstream) | RTX 4080 SUPER | 0.1–0.2 fps, 6,300–6,700 ms/frame | 2 | 1,245,184 / 934,464 (capped) | not asked | **lost at ~7 s**, `0x887A0001`, breadcrumbs `[]` |
-| `2119b0e` + this branch | RTX 4080 SUPER | 30.0 fps, 31–33 ms/frame | 21 | 1,245,184 / 737,855 (capped) | min 32 / max 32 | none in 40 s, with and without `VICTORY_WAVE_WIDE=1` |
-| `2119b0e` + this branch | WARP | 21–30 fps, 33–46 ms/frame | 21 | 1,245,184 / 1,507,328 (no cap) | min 4 / max 4 | none |
+| `70564ae` (upstream) | RTX 4080 SUPER | 0.1鈥?.2 fps, 6,300鈥?,700 ms/frame | 2 | 1,245,184 / 934,464 (capped) | not asked | **lost at ~7 s**, `0x887A0001`, breadcrumbs `[]` |
+| `2119b0e` + this branch | RTX 4080 SUPER | 30.0 fps, 31鈥?3 ms/frame | 21 | 1,245,184 / 737,855 (capped) | min 32 / max 32 | none in 40 s, with and without `VICTORY_WAVE_WIDE=1` |
+| `2119b0e` + this branch | WARP | 21鈥?0 fps, 33鈥?6 ms/frame | 21 | 1,245,184 / 1,507,328 (no cap) | min 4 / max 4 | none |
 
 `2119b0e`'s merge base with `70564ae` **is** `70564ae`: the fork is 225 commits
 ahead of it, and `e9765a7 Fix the device loss introduced by the wave64 update`
 is one of them (ancestor check, 0). So the loss the last report measured was
 already fixed in the branch's base, and nothing in these five commits touches
 it. On this tree the card is not 150x slower than the software adapter: it
-renders the same menus at 30 fps against WARP's 21–30, where `70564ae` renders
-them at 0.1–0.2 on the same card.
+renders the same menus at 30 fps against WARP's 21鈥?0, where `70564ae` renders
+them at 0.1鈥?.2 on the same card.
 
 ### The one capability the two adapters answer differently: wave lanes
 
@@ -289,7 +288,7 @@ WARP             host wave lanes min=4   max=4
 That is the whole adapter difference the translator sees, and it is the one
 `#101` is about: on 32 lanes a console wave64 program runs as two host waves,
 on 4 as sixteen, and `set_host_max_wave` is what lets the exact forms be
-tried at all. It does not decide the device loss — the failing tree never asks.
+tried at all. It does not decide the device loss 鈥?the failing tree never asks.
 
 ### The other one: the title's view heap is 1,245,184 slots and the card stops at 1,000,000
 
@@ -297,19 +296,19 @@ tried at all. It does not decide the device loss — the failing tree never asks
 
 ```
 RTX 4080 SUPER  host view heap capped: the title's heap does not fit
-                error=… (0x80070057) title=1245184 extra=262144 requested=1507328 limit=1000000
+                error=鈥?(0x80070057) title=1245184 extra=262144 requested=1507328 limit=1000000
                 host descriptor heap title_slots=737855 dynamic=262144 host_slots=1000000
 WARP            host descriptor heap title_slots=1245184 dynamic=262144 host_slots=1507328
 ```
 
 WARP makes the title's heap and 2^18 dynamic slots in one go (1,507,328). The
 card refuses anything past 1,000,000, so the fallback keeps 1,000,000 slots and
-**737,855 of the title's 1,245,184** — 507,329 slots (41%) have no host
+**737,855 of the title's 1,245,184** 鈥?507,329 slots (41%) have no host
 descriptor, and a shader that indexes one reads whatever the heap's last slot
 holds. On `70564ae` the same cap left 934,464 (its `DYNAMIC` is 2^16), and the
 per-submission sweep that tree runs over the title's heap printed
 `title slot past the host heap` **310,720** times, one per slot it could not
-make: 1,245,184 − 934,464 exactly.
+make: 1,245,184 鈭?934,464 exactly.
 
 Missing descriptors alone do not remove a device: with the cap forced on the
 software adapter (`VICTORY_VIEW_HEAP_CAP=1000000`) WARP keeps running at
@@ -330,7 +329,7 @@ VICTORY_PROBE_WARP=1 cargo run -p victory-gpu --example d3d12_probe # WARP
 |---|---|---|
 | `D3D12_OPTIONS1` wave lanes (min / max) | 32 / 32 | 4 / 4 |
 | `D3D12_OPTIONS5` | `[1, 0, 12]` | `[1, 0, 11]` |
-| `D3D12_OPTIONS7` (mesh tier, …) | `[10, 90]` | `[10, 100]` |
+| `D3D12_OPTIONS7` (mesh tier, 鈥? | `[10, 90]` | `[10, 100]` |
 | `SHADER_MODEL` | `0x68` (6.8) | `0x68` (6.8) |
 | `ARCHITECTURE1` (UMA bits last) | `[0, 0, 0, 0, 1]` | `[0, 0, 1, 1, 0]` |
 | GPU virtual address bits | `[40, 40]` | `[32, 47]` |
@@ -344,13 +343,13 @@ VICTORY_PROBE_WARP=1 cargo run -p victory-gpu --example d3d12_probe # WARP
 
 `D3D12_FEATURE_FORMAT_SUPPORT` says the same in bits. For format 115 the card
 answers `TEXTURE1D/2D/3D/CUBE, SHADER_LOAD, SHADER_SAMPLE, MIP,
-MULTISAMPLE_RESOLVE, SHADER_GATHER` — **no `RENDER_TARGET`, no
+MULTISAMPLE_RESOLVE, SHADER_GATHER` 鈥?**no `RENDER_TARGET`, no
 `TYPED_UNORDERED_ACCESS_VIEW`**; WARP answers the same plus `RENDER_TARGET,
 BLENDABLE, MULTISAMPLE_RENDERTARGET, MULTISAMPLE_LOAD, TYPED_UNORDERED_ACCESS_VIEW,
 BUFFER, IA_VERTEX_BUFFER`. So WARP grants a use this format does not have on PC,
 and the card is the adapter that follows the answer. That is exactly the line
 `70564ae` printed half a second before it lost the device:
-`no host texture … 2560x1440 format: 115 … flags: 1` (flags 1 is the render
+`no host texture 鈥?2560x1440 format: 115 鈥?flags: 1` (flags 1 is the render
 target).
 
 Both differences are the subject of #101: the wave lanes decide how wave64 code
@@ -373,8 +372,8 @@ with `ALLOW_RENDER_TARGET` dropped the texture is made, the draw's render-target
 view is still made on it, and **WARP loses its device 0.3 s into the first
 frame** (`DXGI_ERROR_DEVICE_REMOVED 0x887A0005`, "the GPU device instance has
 been suspended") on a tree whose WARP runs are otherwise clean for 25-45 s. A
-flag can only be dropped together with the views that need it — the RTV/UAV
-creation refusing by name, or a supported format's twin — and that is the next
+flag can only be dropped together with the views that need it 鈥?the RTV/UAV
+creation refusing by name, or a supported format's twin 鈥?and that is the next
 change, not this one.
 
 ### Upstream moved 241 commits; the card still loses the device there, and ours does not
@@ -386,7 +385,7 @@ open: `3827767 GPU: make tables past a capped host view heap afresh` (the
 named as the thing that hung the card) and `8c26061 GPU: the world stays up`.
 Both are already in `2119b0e`, which is where this branch sits. What upstream
 has that this branch does not is `7216ab7 HLE: implement the RPC runtime's GUID
-calls` and `ff15f98 #636 hle/allow-rpcrt4` — the `refused dll="rpcrt4.dll"`
+calls` and `ff15f98 #636 hle/allow-rpcrt4` 鈥?the `refused dll="rpcrt4.dll"`
 line every run of this tree prints at start-up.
 
 Run on this card, same dump, same menus, fresh data folder, `VICTORY_D3D12_DRED=1`:
@@ -402,8 +401,8 @@ Two things follow, and the first one corrects this report's own table above.
 preparing frame 2 and 3.0 ms on the GPU, then presents frames 4, 8, 16, 32 and
 64 at 33 ms each. The slow submission is the one that prints those 310,720
 warnings (one per slot past the host heap, `3827767`'s diagnostic, each a new
-maximum so each prints once): 310,720 × ~21 µs = 6.5 s. WARP prints none — its
-heap holds the title's whole 1,245,184 slots — which is why the same tree looks
+maximum so each prints once): 310,720 脳 ~21 碌s = 6.5 s. WARP prints none 鈥?its
+heap holds the title's whole 1,245,184 slots 鈥?which is why the same tree looks
 fast there. So "the card is 150x slower than the software adapter" is a
 host-side one-off in a submission, not the card's throughput.
 
@@ -413,14 +412,14 @@ now in `644ebeb`) fixed it for 3080-class runs, and on this 4080 SUPER the
 `644ebeb` build still dies ~18 s in with `0x887A0001` and no breadcrumbs while
 this branch runs the same 40 s cleanly.
 
-### 2026-11-25 08:58: the first-run flow *does* finish — the keys were the wall
+### 2026-11-25 08:58: the first-run flow *does* finish 鈥?the keys were the wall
 
 The rows above say the flow never reaches saving. It reaches it, and this run
 walked it: **`Z:\settings\settings.xml` was written** (3,921 bytes,
 `rage__fwSystemSettingsCollection`, graphics and advancedGraphics sections),
 `xgamesave: create_container container=SettingsProfileSettings` and
 `create_update` were served, and the title went on to open
-`pack\story000_restofworld\story000_restofworld.rpf` — the world's data.
+`pack\story000_restofworld\story000_restofworld.rpf` 鈥?the world's data.
 
 What the earlier runs got wrong is the button mapping, not the title's storage
 path: `gameinput::FALLBACK_BUTTONS` has no entry for the letter `A`. The pad's
@@ -429,11 +428,11 @@ A run that presses `A` sits on the setup pages forever and looks like a save
 that never happens.
 
 With `Enter` as `A`, `Down`/`Up` as themselves, the pages on the software
-adapter (WARP, 10–30 fps, ~60 s to the first page) go:
+adapter (WARP, 10鈥?0 fps, ~60 s to the first page) go:
 
 | page | what got past it |
 |---|---|
-| loading star, then the loading art | — |
+| loading star, then the loading art | 鈥?|
 | `LANGUAGE` (12 entries) | `Enter` (and `Down` first, if the run has been moving the selection) |
 | `LEGAL NOTICES`, Copyright/Photosensitivity list with `Next` | `Down`, `Down`, `Enter` |
 | Rockstar terms, two checkboxes and `Confirmar` (greyed until both) | `Up`, `Enter`, `Up`, `Enter`, `Down`, `Down`, `Enter` |
@@ -441,8 +440,7 @@ adapter (WARP, 10–30 fps, ~60 s to the first page) go:
 | "finish setup?" | `Enter` |
 
 Then the settings are written, `XGameSave` is asked for, and the world's data
-is opened. 4,200 frames in, the software adapter lost its device in the load —
-`0x887A0005` ("the GPU device instance has been suspended"), during host
+is opened. 4,200 frames in, the software adapter lost its device in the load 鈥?`0x887A0005` ("the GPU device instance has been suspended"), during host
 pipeline creation, 30 s after `story000_restofworld.rpf` was opened. So the next
 wall is the world's first frames, and it is now reproducible without the card:
 `VICTORY_KEYS` with `Enter` where this report used to write `A`.
@@ -453,7 +451,7 @@ been taken past the menus yet.
 ### 2026-11-25 09:06: the present that can be one frame old, and what it costs to fence it
 
 A reported defect: the opening animation shows a frame that has gone back, not a
-fade. The candidate mechanism is the present path — `late_free_present()`
+fade. The candidate mechanism is the present path 鈥?`late_free_present()`
 (`VICTORY_RELAY=1`, `VICTORY_LATE_WAIT=3`) issues the back-buffer copy as a
 flight of its own and calls `Present` with no fence, so if the frame's sync has
 not landed the copy reads an older picture.
@@ -467,29 +465,29 @@ the copy went out as a flight:
 | run (RTX 4080 SUPER, the menus, 25 s) | presents | copy sent ahead | `behind` at present |
 |---|---|---|---|
 | default | 685 | 0 | **0 every time** |
-| `VICTORY_RELAY=1` | 672 | **672** | 1–2, never 0 |
-| `VICTORY_RELAY=1 VICTORY_PRESENT_FENCE=1` | 683–695 | 0 | **0 every time** |
+| `VICTORY_RELAY=1` | 672 | **672** | 1鈥?, never 0 |
+| `VICTORY_RELAY=1 VICTORY_PRESENT_FENCE=1` | 683鈥?95 | 0 | **0 every time** |
 
-So: in the default configuration the present is synchronous — the copy is
+So: in the default configuration the present is synchronous 鈥?the copy is
 submitted through `execute`, which settles the flights and waits for the card,
 and only then is `Present` called; there is no way for it to show an older
 picture. With `VICTORY_RELAY=1` the precondition the report describes is real
 and constant: every present is issued with the card still one submission
-behind. Refreshes are `174–187 MB` a frame with **`0 skipped`** in both arms,
+behind. Refreshes are `174鈥?87 MB` a frame with **`0 skipped`** in both arms,
 so no refresh was deferred in either.
 
 **The cheap half of the fix is in**: `VICTORY_PRESENT_FENCE=1` makes a present a
 settle point again even at stage 3 (`present()` takes the synchronous branch).
-On this machine it costs nothing — 683–695 presents in 25 s with the fence
-against 672 without, both ~27 fps — and it removes the "present one submission
+On this machine it costs nothing 鈥?683鈥?95 presents in 25 s with the fence
+against 672 without, both ~27 fps 鈥?and it removes the "present one submission
 behind" state entirely. It is off by default so the runs that measure
 `VICTORY_RELAY`'s pipelining keep their shape; the world, where that pipelining
-is worth 3–6 s/frame, is where its cost has to be measured.
+is worth 3鈥? s/frame, is where its cost has to be measured.
 
 What this does not settle: the animation's frames are not in the captured swap
-chain (`VICTORY_CAPTURE` frames 1–64 are a flat colour), so whether the
+chain (`VICTORY_CAPTURE` frames 1鈥?4 are a flat colour), so whether the
 regression is this path can only be answered by the same three arms above with a
-person watching the animation — default, `VICTORY_RELAY=1`, and
+person watching the animation 鈥?default, `VICTORY_RELAY=1`, and
 `VICTORY_RELAY=1 VICTORY_PRESENT_FENCE=1`. If it comes back in the *default*
 run, it is not this path: the candidates left are the shadow refresh
 (`0 skipped` says it is not deferring) and the title's own double buffering.
@@ -518,7 +516,7 @@ title path path=Z:\cloudcache\*    at=448   FindFirstFileW
 ```
 
 Nothing under `Z:\settings\` is ever opened, and the title makes that directory
-itself — it does not ask whether it exists, so a pre-made `storage\settings\` is not
+itself 鈥?it does not ask whether it exists, so a pre-made `storage\settings\` is not
 what the flow reads. With no `settings.xml` in it, the setup pages run and the
 containers are only asked for minutes later, after the last page.
 
@@ -568,7 +566,7 @@ VIctory: host GPU failure: host GPU device removed after a submission of 7 lists
 So the wall past the menus is the submission that makes the world's buffer views:
 one line lists 104,139 heap slots, the whole heap is walked in one go, and the
 software adapter goes during it. A run that wants the world on the card has to be
-taken the same way — a seeded folder and `Enter`, no setup pages.
+taken the same way 鈥?a seeded folder and `Enter`, no setup pages.
 
 ### 2026-11-25 09:20: the swap chain never shows the animation, so the present is not where it goes back
 
@@ -578,7 +576,7 @@ Two measurements, WARP, this build, fresh data folder, no switches:
   present logs a digest of the probe grid (`capture::digest`): 850 of the 852
   are the same value as their neighbour, and the whole run holds two values.
 - **99 captured frames, 2 distinct files.** `VICTORY_CAPTURE` with
-  `VICTORY_CAPTURE_FRAMES=200..560` step 4: frames 1–128 are one flat colour
+  `VICTORY_CAPTURE_FRAMES=200..560` step 4: frames 1鈥?28 are one flat colour
   (6,121 bytes each) and every frame from 200 to 560 is the *same* file
   (39,992 bytes). Hashing them shows no second picture in that window at all.
 
@@ -597,24 +595,24 @@ tree does not see at all, or it happens in frames the instruments never sample
 (a run with `VICTORY_CAPTURE_FRAMES` naming *every* frame of the first three
 seconds would settle that: 90 files, one hash each).
 
-### 2026-11-25 09:26: every frame of the opening, hashed — five pictures in a thousand
+### 2026-11-25 09:26: every frame of the opening, hashed 鈥?five pictures in a thousand
 
 One more pass on the reported frame regression, with `VICTORY_CAPTURE_FRAMES`
-naming **every** frame of the opening (1–140) plus the usual powers of two, on
+naming **every** frame of the opening (1鈥?40) plus the usual powers of two, on
 WARP, 20 s:
 
 ```
 164 captures, 5 distinct files:
-  96 × 6,121 bytes     frames   1.. 96   one flat colour
-   4 × 30,298 bytes    frames  97..101   the first picture
-   1 × 34,244 bytes    frame  100        (its own value: one frame)
-  40 × 39,992 bytes    frames 102..256   held
-  23 × 17,998 bytes    frames 144..1024  held
+  96 脳 6,121 bytes     frames   1.. 96   one flat colour
+   4 脳 30,298 bytes    frames  97..101   the first picture
+   1 脳 34,244 bytes    frame  100        (its own value: one frame)
+  40 脳 39,992 bytes    frames 102..256   held
+  23 脳 17,998 bytes    frames 144..1024  held
 ```
 
 So the presented picture changes five times in the first thousand frames and is
 constant for tens of frames at each step. There is no per-frame change anywhere
-in it — which is the strongest form of the earlier finding: **this swap chain
+in it 鈥?which is the strongest form of the earlier finding: **this swap chain
 cannot be where a frame that "goes back" is seen**, because nothing advances
 frame to frame on it. The animation the report describes is drawn somewhere
 this tree's `present()` never copies, and that is the question to answer next.
@@ -624,20 +622,20 @@ or a surface presented by a path with no HLE at all. Screen capture of the
 flip-model swap chain comes back black, so window enumeration (which HWNDs the
 title owns, and their sizes) is the cheap next probe rather than another run.
 
-### 2026-11-25 09:31: 293 consecutive frames, four pictures — the opening is a still
+### 2026-11-25 09:31: 293 consecutive frames, four pictures 鈥?the opening is a still
 
-Every frame 100–400 captured one by one (WARP, 22 s):
+Every frame 100鈥?00 captured one by one (WARP, 22 s):
 
 ```
 293 captures, 4 distinct files:
-  38 × flat colour      frames   1..130
-   4 × 30,298 bytes     frames 131..135   the first picture
-   1 × 34,244 bytes     frame  134        one frame of its own
- 250 × 39,992 bytes     frames 136..385   the same file, 250 times
+  38 脳 flat colour      frames   1..130
+   4 脳 30,298 bytes     frames 131..135   the first picture
+   1 脳 34,244 bytes     frame  134        one frame of its own
+ 250 脳 39,992 bytes     frames 136..385   the same file, 250 times
 ```
 
 250 consecutive frames of one file. The pre-menu opening has **no animation at
-all** in the presented picture — not a slow one, none. That is the end of the
+all** in the presented picture 鈥?not a slow one, none. That is the end of the
 "present copies the previous frame" theory for this phase: there is nothing to
 lag behind.
 
@@ -646,19 +644,19 @@ once a profile exists: with a seeded `Z:\settings\settings.xml` the title skips
 the setup pages and loads `story000_restofworld.rpf` (the run in the section
 above), and that is the only phase left in which a moving picture exists. The
 measurement to make there is the same one: `VICTORY_CAPTURE_FRAMES` naming a
-run of consecutive frames through the intro, one hash each; at 1.6–1.8 fps a
+run of consecutive frames through the intro, one hash each; at 1.6鈥?.8 fps a
 frame that goes back would show as a hash repeating a *different* frame's.
 
 One surface only: enumerating the title's windows during boot finds a single
-visible one (`sgaWindowClass`, 2474×1392, our presenter's), so the animation is
+visible one (`sgaWindowClass`, 2474脳1392, our presenter's), so the animation is
 not a second window either.
 
-### 2026-11-25 09:35: the regression reproduces — the presented stream cycles through three pictures
+### 2026-11-25 09:35: the regression reproduces 鈥?the presented stream cycles through three pictures
 
 With a seeded `Z:\settings\settings.xml` (the profile that skips the setup
-pages) and `Enter` every 15 s, WARP reaches the Rockstar loading screen — seven
-stars — and there the presented stream does exactly what the report describes.
-Every frame 150–400 captured, one hash each, in order:
+pages) and `Enter` every 15 s, WARP reaches the Rockstar loading screen 鈥?seven
+stars 鈥?and there the presented stream does exactly what the report describes.
+Every frame 150鈥?00 captured, one hash each, in order:
 
 ```
 320 AA284D   321 BE0541   322 129F39
@@ -674,8 +672,8 @@ Every frame 150–400 captured, one hash each, in order:
 A strict cycle of **three** pictures. A picture that is new appears every third
 frame and takes the oldest one's place; the two older ones are shown again in
 between. On screen that is the loading pulse advancing one step per three
-frames while the frames in between show where it was — the "goes back a frame"
-the report names, and it is 9–10 fps with 39 draws a frame.
+frames while the frames in between show where it was 鈥?the "goes back a frame"
+the report names, and it is 9鈥?0 fps with 39 draws a frame.
 
 What it is **not**:
 
@@ -683,11 +681,10 @@ What it is **not**:
   `sent_ahead=false` (the default path settles the flights and waits for the
   card before `Present`);
 - not a deferred refresh: `0 skipped` in every copystat line of the run, at
-  339–371 MB of refreshes a frame;
+  339鈥?71 MB of refreshes a frame;
 - not a second surface: one visible window (`sgaWindowClass`).
 
-What is left, and the next probe: the frame that is copied is one of a ring —
-three host textures (or three title render targets behind one host texture)
+What is left, and the next probe: the frame that is copied is one of a ring 鈥?three host textures (or three title render targets behind one host texture)
 whose contents are refreshed one per present, so each present shows the member
 whose refresh landed one, two and three presents ago. Reading `resource.rs`'s
 `host_copy`/`let_go_idle` path for the presented texture, and logging which
@@ -700,8 +697,8 @@ copies (`source = texture.as_raw()`). Seeded profile, `Enter` every 15 s, WARP,
 160 s, every present:
 
 ```
-distinct sources: 2   (0x…b060 ×1087, 0x…069a0 ×1087)
-f=300 src=A   f=301 src=B   f=302 src=A   f=303 src=B   …   (strict alternation)
+distinct sources: 2   (0x鈥060 脳1087, 0x鈥?69a0 脳1087)
+f=300 src=A   f=301 src=B   f=302 src=A   f=303 src=B   鈥?  (strict alternation)
 ```
 
 So the presented texture is **double buffered** by the title, one present per
@@ -717,8 +714,8 @@ cycle (this run, same window):
 325 89794D  326 4077E5  327 5E208F
 ```
 
-Two periods at once — 2 for the textures, 3 for the pictures, so the pair
-repeats every six frames — and the same picture appears on *both* textures in
+Two periods at once 鈥?2 for the textures, 3 for the pictures, so the pair
+repeats every six frames 鈥?and the same picture appears on *both* textures in
 turn (321 and 324 are the same file, from different sources). A new picture
 arrives once per three presents and is then shown twice more.
 
@@ -727,17 +724,16 @@ the ring (two, and both carry the same picture), and not a skipped refresh
 (`0 skipped`). What is left is the **refresh cadence of the presented texture**:
 the same picture being copied on the second and third present of a frame means
 the content the layer hands the back buffer is not the frame the title has just
-finished. The next probe is a counter per host texture — refreshed since its
-last present, yes or no — logged with each present, which turns "same picture
+finished. The next probe is a counter per host texture 鈥?refreshed since its
+last present, yes or no 鈥?logged with each present, which turns "same picture
 again" into either "not refreshed" (refresh cadence, fixable in `shadow`) or
 "refreshed, and the title really drew that" (the title's own double buffer).
 
 ### 2026-11-25 10:00: the draws advance every frame; the picture advances every third
 
 The queue's own line, same run, gives the draws per presented frame (cumulative,
-so differences over a window are exact): frame 256 → 512 carries 2,466 − 2,203
-draws over 256 frames (≈1 a frame at the loading screen's start) and 512 →
-1,024 carries 7,300 − 2,203 over 512 (≈10 a frame). **The title draws every
+so differences over a window are exact): frame 256 鈫?512 carries 2,466 鈭?2,203
+draws over 256 frames (鈮? a frame at the loading screen's start) and 512 鈫?1,024 carries 7,300 鈭?2,203 over 512 (鈮?0 a frame). **The title draws every
 frame.** The picture, meanwhile, repeats with a period of three (section
 above), and each of the two host textures shows all three pictures in turn, so
 the alternation is not what makes it repeat.
@@ -746,8 +742,8 @@ The chain a presented picture goes through, and which of its steps can be three
 frames behind:
 
 ```
-title draw → copy-back into title memory → Texture::refresh (staging)
-           → host copy upload → present's CopyResource(back, host copy)
+title draw 鈫?copy-back into title memory 鈫?Texture::refresh (staging)
+           鈫?host copy upload 鈫?present's CopyResource(back, host copy)
 ```
 
 `Texture::refresh` is deduped per submission: `Batch::texture_due` (host.rs)
@@ -757,7 +753,7 @@ early when the write-watch says the pages did not change. The copy-back of what
 the frame's shaders wrote is the step before both. Three frames is exactly one
 turn of that chain, which is where the next instrument goes: a **content
 generation** counter per host copy, bumped at every fill (and at every
-copy-back that names it), logged with each present — then "the same picture
+copy-back that names it), logged with each present 鈥?then "the same picture
 again" becomes "this picture is three generations old", and the step that
 skips two of three turns is named.
 
@@ -775,7 +771,7 @@ skips two of three turns is named.
 ### The opening animation never plays at all
 `movies.rpf` is registered with DirectStorage at start-up and nothing else: no
 `Bink*` import is called, and no media interface is asked for. Presented frames
-agree — `frame-1` to `frame-64` are pure black, and from `frame-120` on every
+agree 鈥?`frame-1` to `frame-64` are pure black, and from `frame-120` on every
 frame is the same still of the account picker with nothing but its button
 prompts drawn. So on this machine there is no opening animation to flicker;
 issue #103 reports the same thing from another machine.
@@ -789,8 +785,8 @@ warning with nothing under it. It now says which switch records them.
 
 With the switch on, the black frame holds 27 draws, all into one `3840x2160 f28`
 target, and the constant buffers they read carry `1.77e-7, 1.77e-7, 1.77e-7, 1.0`
-— a fade at its end. The level line before it walks `145 … 44 → 0` and the one
-after climbs `63 … 234`. So it is the fade through black between two screens,
+鈥?a fade at its end. The level line before it walks `145 鈥?44 鈫?0` and the one
+after climbs `63 鈥?234`. So it is the fade through black between two screens,
 not a pass that failed. A run that cannot finish the first-run flow fades out
 and back in on every attempt, which is what the screen blinking looks like.
 Fixing the flow (above) should take the blinking with it.
@@ -812,9 +808,9 @@ menu survives.
 
 ## Related
 
-- #101 — the report this comes from.
-- #96 — the measurement template this text follows.
-- `docs/fork-ray-tracing.md` — the other place where wave64 programs in two
+- #101 鈥?the report this comes from.
+- #96 鈥?the measurement template this text follows.
+- `docs/fork-ray-tracing.md` 鈥?the other place where wave64 programs in two
   host waves must meet.
 
 ### 2026-11-25 09:55: the fork's c96b4f2 is in, and it is worth 3x on the world path
@@ -824,12 +820,12 @@ defaults; textures are on the card before the character bake; one host copy per 
 texture") onto this branch. Verified here:
 
 - `cargo build --profile diag -p victory --features diagnostics` clean;
-  `cargo test -p victory-gpu -p victory-hle --lib` → **121 + 101 passed**, 0 failed.
-- Seeded profile, `Enter` every 15 s, WARP, 185 s: **4.4–21.7 fps (mostly 5–14)**, world packs
-  opened (`core_restofworld001`), and **no device removal in the whole run** — where the run
-  before this merge was 1.6–1.8 fps and lost WARP's device 82 s in.
+  `cargo test -p victory-gpu -p victory-hle --lib` 鈫?**121 + 101 passed**, 0 failed.
+- Seeded profile, `Enter` every 15 s, WARP, 185 s: **4.4鈥?1.7 fps (mostly 5鈥?4)**, world packs
+  opened (`core_restofworld001`), and **no device removal in the whole run** 鈥?where the run
+  before this merge was 1.6鈥?.8 fps and lost WARP's device 82 s in.
 
 So the world path on the software adapter is roughly 3x faster than it was two hours ago and
 survives five minutes. The three-frame picture cycle measured earlier was on the pre-merge
-tree at 9 fps on the loading screen; whether it still holds at 5–14 fps is the next thing to
+tree at 9 fps on the loading screen; whether it still holds at 5鈥?4 fps is the next thing to
 re-measure, with the same one-hash-per-frame method.
