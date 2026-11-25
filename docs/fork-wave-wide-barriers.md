@@ -816,6 +816,52 @@ held by its title texture alone. That is the next thing to test, not a conclusio
 `VICTORY_HEAP_SWEEP=1` is the switch this section adds; the world draws at 0.7–1.8 fps
 on WARP in all five runs.
 
+### 2026-11-25 10:40: three candidates for the world's death, and none of them is it
+
+The world (a seeded data folder, `Enter` every 15 s, WARP) now has seven runs, and
+each switch that was a suspect was measured one arm at a time:
+
+| run | arm | came up in the world | device gone |
+|---|---|---|---|
+| seed2 | 54894e1, before the merges | 01:13:11 | **82 s** |
+| seed3 | defaults (relay on, whole heap sweep) | 01:48:58 | **181 s** |
+| seed4 | heap pass sliced | 01:55:21 | none in 107 s |
+| sweepA | heap pass sliced | 02:00:43 | **96 s** |
+| sweepB | `VICTORY_HEAP_SWEEP=1` (whole heap) | 02:04:28 | none in 94 s |
+| relay0 | `VICTORY_RELAY=0` | 02:33:34 | **120 s** |
+| sweep0 | `VICTORY_TEXTURE_SWEEP=0` | 02:37:55 | **98 s** |
+
+Three things follow.
+
+**The heap-buffer pass is not it** (96 s sliced against 94 s whole).
+
+**The present relay is not it, and it does move the site.** With `VICTORY_RELAY=0` the
+death line becomes `after a submission of 8 lists` instead of `after 1 submissions
+sent ahead (VICTORY_RELAY=1) of 8 lists`: the same frames, reported by the synchronous
+path. The timing is unchanged (120 s).
+
+**The sweep that lets go of host copies of textures the title fills is not it either**
+(98 s with `VICTORY_TEXTURE_SWEEP=0`, against 181 s and 82 s with it). Those sweeps are
+large, though — `154 host copies of textures the title fills let go (247,680 KiB)` in
+one line, 2.4 s before one of the deaths — so they stay on the list of things to watch
+even though removing them did not save the world.
+
+What is left is a death that comes after 80-180 s of world frames (0.7-1.8 fps, so
+100-300 frames) in every arm, at a submission whose lists the log names nothing of.
+The next probe is the debug layer: `VICTORY_D3D12_DEBUG=1`, seeded, WARP. The failure
+text asks for it by name and it is the only thing that names a bad command instead of
+an HRESULT.
+
+### Slot 0x128 answers for the host device now (upstream #928)
+
+`crates/victory-gpu/src/device.rs` left device slot 0x128 (`GetDeviceRemovedReason`)
+on the default handler, which answers `E_NOTIMPL` (`0x80004001`) on a healthy device —
+a title testing `FAILED(GetDeviceRemovedReason())` reads that as a lost device.
+Upstream `13185f5` wires it to a query of the host device's own state; that body is
+here now, with a unit test that the slot answers `S_OK` while the host device lives
+(`victory-gpu` 115 passed). This is the `0x887A0004` half of every failure line: the
+console's own answer is now the host's answer instead of a made-up one.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
