@@ -1,4 +1,4 @@
-//! Presented frames written to PNG files, to see what reaches the screen:
+﻿//! Presented frames written to PNG files, to see what reaches the screen:
 //! with `VICTORY_CAPTURE=<folder>`, every frame whose number is a power of
 //! two (the frames the log reports) is saved as `frame-<n>.png`, at half
 //! size. Only in builds with diagnostics.
@@ -814,6 +814,28 @@ pub(crate) fn black(buffer: &ID3D12Resource) -> bool {
     }
 }
 
+/// A digest of what the probe's grid holds, for a run that asks whether two
+/// presented frames are the same picture (`VICTORY_PRESENT_TRACE=1`): the
+/// frame-to-frame signal the black check throws away.
+pub(crate) fn digest(buffer: &ID3D12Resource) -> u64 {
+    let mut data = std::ptr::null_mut();
+    // SAFETY: the copies finished (every submission is waited for).
+    unsafe {
+        if buffer.Map(0, None, Some(&mut data)).is_err() {
+            return 0;
+        }
+        let bytes =
+            std::slice::from_raw_parts(data.cast::<u8>(), (SLOT * u64::from(GRID * GRID)) as usize);
+        // FNV-1a: no dependency, and a picture that moved changes it.
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        for &b in bytes.iter().step_by(3) {
+            hash ^= u64::from(b);
+            hash = hash.wrapping_mul(0x100_0000_01b3);
+        }
+        buffer.Unmap(0, None);
+        hash
+    }
+}
 /// The brightest probed channel of the last frames, oldest first: a fade
 /// darkens over several, a glitch drops at once.
 static LEVELS: std::sync::Mutex<std::collections::VecDeque<u8>> =

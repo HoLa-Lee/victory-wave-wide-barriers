@@ -186,6 +186,7 @@ impl Wide {
     }
 }
 
+#[track_caller]
 fn wide(path: *const u16) -> Wide {
     if path.is_null() {
         return Wide(path, None);
@@ -200,17 +201,22 @@ fn wide(path: *const u16) -> Wide {
     Wide(path, host)
 }
 
-/// Every title path at debug level, with the host path if rewritten.
+/// Every title path at debug level, with the host path if rewritten and the
+/// line of the call in this file (the export it came in through: which file
+/// call a title makes is the question a run rarely answers twice).
+#[track_caller]
 fn trace(path: &[u16], host: Option<&[u16]>) {
     tracing::debug!(
         path = %String::from_utf16_lossy(path),
         host = host.map(|h| String::from_utf16_lossy(&h[..h.len() - 1])),
+        at = std::panic::Location::caller().line(),
         "title path"
     );
 }
 
 /// A narrow path (ANSI code page, as the host decodes it) on a virtual
 /// drive, as a wide host path.
+#[track_caller]
 fn narrow(path: *const c_char) -> Option<Vec<u16>> {
     if path.is_null() {
         return None;

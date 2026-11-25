@@ -1,4 +1,4 @@
-//! The host GPU: one D3D12 device and direct queue (decision 0007), and a
+﻿//! The host GPU: one D3D12 device and direct queue (decision 0007), and a
 //! window to present on.
 //!
 //! shortcut: every submission is waited for, so CPU and GPU never overlap
@@ -1684,6 +1684,32 @@ impl Drop for Deferred {
     }
 }
 
+/// `VICTORY_PRESENT_TRACE=1`: one line per present, with what the card had
+/// run when it was issued, whether the copy went out as a flight, and the
+/// digest of the picture it read (diagnostics).
+#[cfg(feature = "diagnostics")]
+fn present_trace() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_PRESENT_TRACE").is_some())
+}
+
+/// `VICTORY_PRESENT_FENCE=1`: a present settles the submissions sent ahead
+/// again, even at [`late_free_present`]'s stage 3 — the copy to the back
+/// buffer then reads a host copy whose refreshes are all in, and the frame
+/// cannot be one old. Measured on this machine's menus (RTX 4080 SUPER,
+/// 25 s): `VICTORY_RELAY=1` alone presents 672 frames with the card a
+/// submission behind every time; with this switch 683-695 presents, `behind=0`
+/// every time, the same ~27 fps, so the fence costs nothing here.
+#[cfg(feature = "diagnostics")]
+fn present_fence() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_PRESENT_FENCE").is_some())
+}
+
+#[cfg(not(feature = "diagnostics"))]
+fn present_fence() -> bool {
+    false
+}
 /// Whether a queue's submissions go to the card without a wait for each
 /// (`VICTORY_LATE_WAIT=1`; off by default, and off in the timing run, which
 /// waits for every list on its own).
@@ -5992,7 +6018,7 @@ impl Host {
             let read_now = crate::capture::wanted(frame) || crate::capture::listed(frame);
             #[cfg(not(feature = "diagnostics"))]
             let read_now = false;
-            let slot = if late_free_present() && !read_now {
+            let slot = if late_free_present() && !read_now && !present_fence() {
                 let finished = FINISHED.load(Ordering::Acquire);
                 p.ahead.iter().position(|(_, flown)| *flown <= finished).or_else(|| {
                     let list = self.new_list().ok()?;
@@ -6045,6 +6071,30 @@ impl Host {
             #[cfg(feature = "diagnostics")]
             if let Some((buffer, footprint)) = capture {
                 crate::capture::save_read_back(frame, &buffer, &footprint);
+            }
+            // `VICTORY_PRESENT_TRACE=1`: what the card had run when this
+            // frame was presented, whether the copy went out as a flight, and
+            // the digest of the picture. A present issued with work in the air
+            // (`behind` > 0) is the shape a frame that shows an older picture
+            // makes; a digest that repeats out of order is the frame itself.
+            #[cfg(feature = "diagnostics")]
+            if present_trace() {
+                // SAFETY: a plain query.
+                let completed = unsafe { self.fence.GetCompletedValue() };
+                let submitted = *self.submitted.lock().unwrap_or_else(|e| e.into_inner());
+                let digest = match probe.as_ref() {
+                    Some(b) => format!("{:#018x}", crate::capture::digest(b)),
+                    None => String::new(),
+                };
+                tracing::info!(
+                    frame,
+                    sent_ahead = slot.is_some(),
+                    submitted,
+                    completed,
+                    behind = submitted.saturating_sub(completed),
+                    digest = %digest,
+                    "present"
+                );
             }
             let _ = p.swap_chain.Present(0, DXGI_PRESENT(0));
             p.meter.frame(p.hwnd);

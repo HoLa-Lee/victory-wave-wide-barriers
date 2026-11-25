@@ -494,6 +494,67 @@ person watching the animation — default, `VICTORY_RELAY=1`, and
 run, it is not this path: the candidates left are the shadow refresh
 (`0 skipped` says it is not deferring) and the title's own double buffering.
 
+### 2026-11-25 09:10: what says "settings exist" is `Z:\settings\settings.xml`, and a seeded one skips the flow
+
+The title's file calls are traced at debug (`VICTORY_LOG=victory_hle::modules::files=debug`)
+and the trace now names the export a path came in through (`at=` is the line of the
+call in `crates/victory-hle/src/modules/files.rs`), so a path can be read back as the
+call it was:
+
+| line | export |
+|---|---|
+| 271 | `CreateFileW` |
+| 381 | `CreateDirectoryW` |
+| 402 | `GetFileAttributesW` |
+| 448 | `FindFirstFileW` |
+
+**A fresh data folder.** 489 ms in, right after the `.rpf` archives are mounted:
+
+```
+title path path=Z:\settings\       at=381   CreateDirectoryW
+title path path=Z:\cloudpers\      at=381   CreateDirectoryW
+title path path=Z:\cloudcache\     at=381   CreateDirectoryW
+title path path=Z:\cloudcache\*    at=448   FindFirstFileW
+```
+
+Nothing under `Z:\settings\` is ever opened, and the title makes that directory
+itself — it does not ask whether it exists, so a pre-made `storage\settings\` is not
+what the flow reads. With no `settings.xml` in it, the setup pages run and the
+containers are only asked for minutes later, after the last page.
+
+**The same run with the file the 08:58 run wrote** (`settings.xml`, 3,921 bytes,
+copied into `storage\settings\` of a fresh data folder):
+
+```
+01:10:57.910  Z:\settings\             at=381   CreateDirectoryW
+01:11:01.874  xgamesave: create_container container=Player
+01:11:02.061  xgamesave: create_container container=SettingsProfileSettings
+01:11:02.127  xgamesave: create_container container=SettingsProfileSettings
+01:11:02.158  Z:\settings\settings.xml at=402   GetFileAttributesW
+01:11:02.159  Z:\settings\settings.xml at=271   CreateFileW
+```
+
+Four seconds in, with no page and no key pressed: `Player` and
+`SettingsProfileSettings` are asked for, then the file is asked about
+(`GetFileAttributesW`) and read (`CreateFileW`). So the gate is the **file's**
+presence, and its answer decides whether the setup pages run at all; the four
+directories are made by the title on every launch either way and are not the check.
+
+That is also a shortcut to the world: a data folder seeded with a `settings.xml`
+skips the whole first-run flow, so a run that only wants frames after the menus no
+longer needs `VICTORY_KEYS` for them:
+
+```powershell
+# seed the settings the flow writes, then start with no keys at all
+Copy-Item -Recurse vlogs\data-rpc-tick\7952987A vlogs\data-seed\7952987A
+$env:VICTORY_DATA_DIR = "$PWD\vlogs\data-seed"; $env:VICTORY_D3D12_WARP = "1"
+.\target\diag\victory.exe run <game dir>\game_scarlett_master.exe --execute
+```
+
+45 s of that on WARP (22.8 fps, 892 log lines at `files=debug`) stayed on the menus
+without a device loss; it had not opened `pack\story000_restofworld\story000_restofworld.rpf`
+yet, so the world is still the wall it was.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
