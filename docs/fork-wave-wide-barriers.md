@@ -1476,3 +1476,30 @@ What the layer does unlock is **GPU-based validation** (`VICTORY_D3D12_GBV=1`, w
 debug layer): out-of-range descriptor reads become messages instead of card resets, and this
 title indexes its heap directly. That is the next run, and the first one this machine could
 ever have made.
+
+### 2026-11-25 12:15: under GBV the death moves to an upload — both are "the data was not written yet"
+
+Two captures of the same death, one with GPU-based validation on (`VICTORY_D3D12_GBV=1`, the
+first run this machine could make with the debug layer now installed) and one without:
+
+```
+GBV on  (720 s): list 0 of 1, of its 422:
+  texture upload 0x279006de590 (128x128x1 f71 mips 6) sub 3 of 6
+  from staging 0x702600000000+0x3e08: offset 0x3800 16x16x1 pitch 256
+GBV off (320 s): list 5 of 8, of its 604:
+  indirect kind 10 max 1 at 0xd61d1a9a0 args [0, 0, 0, 0, 0] [mesh 30332cf87c4e0eae]
+```
+
+Different commands, same shape: **one is a texture upload whose staging box lies past the data
+(16×16 at offset 0x3800, pitch 256), the other an indirect record whose five words are zero.**
+Both say the same thing — a list ran against title memory the title had not filled yet. That is
+the console's own contract (`host.rs`'s `late` comment: on the console the card reads title
+memory when it runs, not when the list is submitted), and this layer copies title memory into
+staging *when the list is prepared*. The world is where the title rewrites memory between
+submissions fast enough for that difference to matter.
+
+Also merged this round: fxceless's `310c6eb` ("packed textures stay in the upload queue; a
+texture on the card is refreshed when the card is full", `VICTORY_STALE_TEXTURES`), whose message
+says the first room is now lit with its walls and the characters' textures. Merged clean
+(`fe210b7`, 9 files, +1,807/−32), `cargo test -p victory-gpu --lib` 127 passed, and the world
+still dies the same way — so that fix is not this death.
