@@ -240,3 +240,57 @@ cargo build --profile diag -p victory --features diagnostics
 抓帧：`frame-5000.png` = 3,066,463 字节（过场画面，完整）。
 
 **状态**：`story 7 / world 8`，700 秒存活，**0 丢设备 0 陷阱**。
+
+---
+
+## 15. 社区情报（2026-11-26 01:20，来自 gta6pconline.com 的跟踪器与其 GitHub 链接）
+
+站点是独立跟踪器（每小时扫仓库、每小时查 GitHub DMCA 日志）。全局：**0 个项目可玩**，36 个努力收录 9 个，评分是 6 阶段（Boot→Menu→Load→World→Move→Play），**75% ≠ 75% 可玩**。三条技术路线：兼容层（我们这条最快出画面）、静态重编译（five-star-recomp 等）、模拟器。
+
+### 15.1 立刻要动的一个风险（已处理一半）
+
+Take-Two 在 **11-24** 发了首份 GTA VI DMCA：`ItsNotRexed/Leonida` **连同 3,007 个 fork 被关**；`VIctory`、`XCL`、`five-star-recomp` 未被点名，仍在线；`fablinoo/palmwave`、`LeonidaReforge/Leonida` 已 404。
+→ 我们的 fork 里原有 6 张**游戏截图**（过场、字幕、加载星），**违反上游 `docs/asset-policy.md` 第 1 条**。
+→ **已处理**：图片移出仓库（`screenshots-local/` 留在本机），docs 里的引用改成按名字提及，**仓库现在 0 张图片**（只剩 `bcpack-tables.bin` 这个官方例外）。
+→ **仍未处理**：**历史提交里还有**。若要彻底清除需 `git filter-repo` 重写全部 hash 并强推（PR #2471/#2478 基于上游 main，不受影响）。操作者决定是否做。
+
+### 15.2 四个值得抄的方向（按价值）
+
+**① paired-wave64：`fxceless/victory-fork` PR #854（open，23 文件 +4587/−1332）**
+> 32-lane GPU 上把 wave64 程序**成对**翻译；230 个原本翻译失败的程序通过；36 个原本"按半宽近似"的 compute 现在算出 64 lane 的结果
+> Compute 通过 2,695→**2,729**（失败 39→5）；Mesh 8,657→8,694（失败 108→71）
+
+Flamingo fork 合并后自称 **"no pipeline refused"**。
+👉 **这是我们在 WARP 上看到 458 次 wave64 拒绝的解法**。合并它之后，WARP 世界才第一次"可以被判断"。
+
+**② 开放世界丢设备的嫌疑：光线追踪 compute 管线 —— `ThatRecompDev/five-star-recomp`（★217，全场最高）**
+> 把 **RT compute pass 的管线做成 stand-in（除非 `--raytracing`）**，止住了"进世界 25–35 秒必丢设备"，跑出**首次 18 分钟世界无移除**
+
+👉 与该项目的静态重编译路线无关，这个"先禁用某类管线再测"的方法可以照搬到我们的基线上（我们已有"改前 6/6 死、改后 700–900 秒活"的对照）。
+
+**③ VRAM 满时回退更小 mip —— `ka1qux/BRVIctory-ka1qux`（★76）**
+README 写明 **"smaller-mip fallback when VRAM fills"**；最新提交 "ray tracing is on by default（`VICTORY_RAYS=0` 关）"、守卫块改成位集 + 1 MiB 区域。
+👉 我们量到的"纹理双份 10 GB"问题的**社区临时解法**，可作为有预算缓存实现前的缓解。
+
+**④ 开放世界的现实帧率参照 —— `PastiiJay/klbf-lab`（★83）**
+RX 9070 XT：**开放世界自由行走 5–8 fps**（77 分钟），从新游戏玩到第二个任务（"Gone Fishing"），日夜循环可用。
+👉 我们的 4.2 fps（4,035–5,645 draws）与它同量级；上游 9.6 fps 是 3,850 draws 的第一个房间。
+
+### 15.3 其它值得知道的仓库
+
+| 仓库 | ★ | 一句话 |
+|---|---|---|
+| `realblastex/flamingo` | 14 | victory-fork 的调优 fork，24 分钟跑 8.6 fps 平均、零拒管线、**合并了 PR #854** |
+| `pragyaangaur/VIctory-macOS` | — | CrossOver + D3DMetal，M5 Pro 世界帧 2.4–2.9 s |
+| `Belobug/VIctory-Belobug-AMD` | — | RX 9070 XT 亮世界 3–5 fps，深度环境光 + 并行回拷 |
+| `DexNom/VIctory` | 10 | RX 7900 XTX 室内 3.52–4.05 fps；`--rt` 实验测得 969 ms/帧 |
+| `LooperSalty/AnyXboxX` | — | 模拟器 + 捆绑 VIctory 运行时，Win 4.8–6.9 fps |
+| `xcl-dev/xcl` | — | 菜单 30 fps，NVIDIA 未合并分支世界 ~5 fps（RTX 5090） |
+| `R0Y00/Xbox2Windows` | — | 静态重编译到 C++/DXIL，仅到加载 |
+| `Maybox2Windows`/`PercyScarlett`/`OpenScarlett` | — | 兼容层，首屏/亮过场 2–3 fps |
+
+### 15.4 对我们"30 fps 时间表"的修正输入
+
+- 现在**全网最好的"第一个房间"是 9.6–10.3 fps（≈100 ms）**，我们的卡上是 4.2 fps（238 ms，场景更重）
+- **开放世界最好成绩是 5–8 fps**（klbf-lab，RX 9070 XT）
+- 因此上一轮推算里"开放世界 10–20 fps 需 3–5 周"仍成立，但**"全游 30 fps"的瓶颈现在更明确地落在：paired-wave64（正确性）+ RT 管线（稳定性）+ 纹理内存（长跑）**这三件的组合上，而不是单点优化
