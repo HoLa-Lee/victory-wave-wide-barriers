@@ -469,3 +469,24 @@ Two changes follow, in this order:
 2. **Do not touch title memory that is not going to be uploaded.** `0 skipped` also means every
    texture's memory is *read*, which is what faults it back in; a refresh that is skipped never
    touches it, and the page pool stays on disk where the title put it.
+
+## Skipping unchanged textures: 7.0 s of texture work becomes 1.7–3.9 s
+
+`VICTORY_TEXTURE_SAMPLE_SKIP=1` fingerprints four 64-byte spots of a texture's title memory
+instead of reading it whole when neither write-watch answers (the title's page pool is a file
+mapping, where `GetWriteWatch` says nothing and every refresh therefore read everything). Same
+card run, same keys:
+
+| | before | with the skip |
+|---|---|---|
+| frame | 9301 ms (0.1 fps) | 2328–4866 ms (0.2–0.4 fps) |
+| of that, textures | 7000.6 ms | 1707.9–3911.8 ms |
+| refresh wait for title memory | 6814.2 ms | 1015.9 ms |
+
+and the picture is still right — the capture at frame 3000 renders the legal-notices page in
+Korean, every glyph in place.
+
+So the mechanism is confirmed and the ceiling is now the remaining 1.7–3.9 s: most textures still
+change (the story is streaming them in), and the fingerprint is only a skip for the ones that do
+not. The next levers are the ones the frame line names beside it: 8,490 draws a frame, 1,935 of
+them dropped for want of a host pipeline, and a heap pass of 904 ms.

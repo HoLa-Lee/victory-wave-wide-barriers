@@ -64,6 +64,13 @@ pub(crate) struct Staging {
 struct Last {
     hash: Option<blake3::Hash>,
     asked: u64,
+    /// `VICTORY_TEXTURE_SAMPLE_SKIP`: a cheap fingerprint of four spots in the
+    /// texture's title memory, for memory with no write-watch (the title's
+    /// page pool is a file mapping, where `GetWriteWatch` answers nothing and
+    /// every refresh therefore reads it whole — 24,821 refreshes and 24.8 GB
+    /// a frame at 0.1 fps on the card, see docs/world-death.md).
+    sample: u64,
+    sampled: bool,
     /// The frame a partly mapped texture was last read in.
     partial: Option<u64>,
 }
@@ -724,6 +731,39 @@ impl Staging {
             #[cfg(feature = "diagnostics")]
             crate::copystat::add(crate::copystat::C::TexWatched, size as u64);
             return size;
+        }
+        // File-backed memory has no write-watch either: four spots of it are
+        // fingerprinted instead, and an unchanged one skips the read.
+        if std::env::var_os("VICTORY_TEXTURE_SAMPLE_SKIP").is_some() {
+            let mut spots = [0u8; 4 * 64];
+            let last_at = size.saturating_sub(64);
+            let mut got = 0usize;
+            for (i, at) in [0usize, size / 3, size * 2 / 3, last_at].into_iter().enumerate() {
+                let want = 64.min(size.saturating_sub(at));
+                if want == 0 {
+                    continue;
+                }
+                crate::host::copy_mapped(
+                    spots[i * 64..i * 64 + want].as_mut_ptr(),
+                    (start + at) as *const u8,
+                    want,
+                    false,
+                );
+                got += want;
+            }
+            let mut sample: u64 = 0xcbf2_9ce4_8422_2325;
+            for &b in &spots[..got.min(spots.len())] {
+                sample ^= u64::from(b);
+                sample = sample.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+            let unchanged = last.sampled && last.sample == sample;
+            last.sample = sample;
+            last.sampled = true;
+            if unchanged {
+                #[cfg(feature = "diagnostics")]
+                crate::texture::count_refresh_skipped();
+                return 0;
+            }
         }
         // View memory has no write-watch, and a texture there was hashed
         // whole at every check: 229 MB and 51 ms a frame in a gameplay view
