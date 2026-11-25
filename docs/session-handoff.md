@@ -684,3 +684,50 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 
 - **Marvisak main（`13f91ca`）本身在这张卡上起不来**：抓帧那轮用 main 裸编，开场就 `device removed (0x887A0004)`；而我们合并 fxceless 后的 main 能跑 1,800 s。→ 给 main 的 PR 都要意识到"main 未合并 fork 的修复，卡上跑不动"，这也是 #1098/#2790 之类的价值所在。
 - `git remote get-url owner` 拿到的是 **fetch** URL（无 token），要 `--push`。
+
+---
+
+## 22. 主干预动了（23:27Z）+ #2790 关闭 + 监控第 0 轮就抓到（2026-11-26 08:05）
+
+### 22.1 上游一次合了 62 个文件：`13f91ca` → `63bcca4`
+
++9,562/−814，含 `#158`（depth bounds 到 host）、`#2493/#2484/#2468/#2462/#2455/#2449/#2448/#2395/#2378` 等，几乎全是 GPU 绑定与 shader 转换修复。
+
+### 22.2 PR #2790 **已关闭**：main 自己做了
+
+`a7cb47c`（Pablo González，PR **#1152**，11-25 22:49Z）新增 `host_blend()`：整数 RT 关混合、共享态时"每个 target 一份、别人保留自己的"——**与我们那版逐条相同，连 `IndependentBlendEnable` 的处理都在**（`blends(i)` 共享时读 slot 0）。
+而且**它自带两个测试**（`integer_targets_do_not_blend`、`blend_states_without_integer_blending_are_kept`），覆盖了我们计划补的全部用例 → **没有后续 PR 可做**。
+已关（评论 `7177698887`，随后补一条更正 `7177869958`，因为我在关闭评论里误说"要补测试"）。
+→ 这条路径的净贡献是：卡上的拒绝原话与丢失 draws 数、关闭前后的**同帧像素对比**、以及 @fuzeofficlal 的 `IndependentBlendEnable` 检查（main 的实现也确实处理了）。
+
+### 22.3 上游 main 现在能在卡上启动了 —— 但慢 15 倍、被拒 155 个管线
+
+| | main `13f91ca` | main `63bcca4` | 我们合并线 |
+|---|---|---|---|
+| 卡上启动 | **立刻 `device removed 0x887A0004`** | **跑满 300 s，0 丢设备** | 跑满 1,800 s |
+| 帧 | — | **0.1–0.3 fps（3,071–7,786 ms），GPU 2,780–5,226 ms** | **4.3–4.8 fps（208–232 ms）** |
+| 被拒管线（`xtask refusals`） | — | **155 种**（几乎全是 compute） | **7 种** |
+| draws | — | 762–3,296 | 4,000–5,900 |
+
+→ **新口径**：main 的"能启动"是这一批修复带来的；但它的翻译器仍拒 155 个程序，所以只有 0.3 fps。**fork 那条线的转换工作（以及我们的并线）是决定帧率的东西，不是锦上添花。**
+→ 这也解释了 #1098/#854 一类工作的真正价值：每减少一个"被拒管线"，卡上就多一段真实工作量、少一段空白。
+
+### 22.4 我们的 main 与上游 main 的合并：**没做，留给专门一轮**
+
+`pr-intake` 里试合 `marvisak/main`：冲突遍布 `README.md`、`apps/victory/{main,run,translate}.rs`、`crates/victory-formats/src/texture.rs`、`victory-game/src/sgd5.rs`、`victory-gpu/{Cargo.toml,capture,copystat,descriptor,...}`、`victory-shader/{native,resource,structure}.rs` —— 62 文件的进厂 + 两边分叉，已 `merge --abort`，工作树回到 `df67a5f`。
+**下次要单独一轮做**：先按目录分批（shader → gpu → apps），每批编译通过再进下一批。
+
+### 22.5 监控第 0 轮就兑现了
+
+首轮快照（`vlogs/monitor/20261126-0729.json`）报出 `Marvisak main 13f91ca -> f3578e3`，随后确认 `mergeable_state=dirty`：**#2790 与上游新提交冲突**。如果没有这条，会一直以为 PR 在等评审。实际处理是"上游已经做了 → 关闭"，比"rebase 再推"省了一整轮。
+定时任务 `schedule-d73b3261-87e9-46ae-b5f8-072af1d6a582`，每 30 分钟 × 16 轮，从 08:15 起。
+
+### 22.6 现在的四个 PR
+
+| PR | head | 状态 |
+|---|---|---|
+| #2478 纹理刷新步长 | `c8d6571` | open，`mergeable=True`（能否仍与 `63bcca4` 干净合并待下轮确认） |
+| #2892 `xtask refusals` | `dc7d199` | open，+294/−0 |
+| #1098（fxceless）预算测试不变量 | `bfbb167` | open，+16/−5 |
+| #2790 整数混合 | `69d483f` | **已关闭**（上游 `a7cb47c` 做了，且带测试） |
+| #2471 拒绝日志 | `0cd1a79` | 已关闭（归因不可靠） |
