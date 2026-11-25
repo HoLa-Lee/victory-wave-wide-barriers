@@ -5355,6 +5355,13 @@ impl HostList {
                     continue;
                 }
                 Step::Texture(staging) => {
+                    // `VICTORY_REFRESH_READ_SET`: a texture no draw of this
+                    // submission reads is not refreshed, whatever wrote its
+                    // slots (docs/world-death.md).
+                    if !crate::texture::was_read(staging.memory_key()) {
+                        crate::texture::count_refresh_skipped();
+                        continue;
+                    }
                     if batch.texture_due(staging) {
                         staging.refresh();
                     } else {

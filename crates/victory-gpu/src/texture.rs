@@ -1,4 +1,4 @@
-﻿//! Texture contents the title writes itself (decision 0007, "Texture
+//! Texture contents the title writes itself (decision 0007, "Texture
 //! memory"): streamed pages, layout-library copies, movie frames, glyph
 //! atlases. Such a texture lives in console memory in its tiled layout;
 //! before a submission samples its host copy, the memory is detiled into a
@@ -80,6 +80,59 @@ struct Last {
 unsafe impl Send for Staging {}
 // SAFETY: as above.
 unsafe impl Sync for Staging {}
+
+/// `VICTORY_REFRESH_READ_SET`: refresh only the textures the submission's
+/// draws actually read. The step stream runs at flush time, after every draw
+/// has been recorded, so the set is complete by then; a texture whose slots
+/// were written but never read waits for the frame that reads it. Measured
+/// without it: 24,821 refreshes and 24.8 GB of title memory a frame, `0
+/// skipped` (docs/world-death.md).
+static READ_TEXTS: Mutex<Option<std::collections::HashSet<usize>>> = Mutex::new(None);
+
+fn read_set() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_REFRESH_READ_SET").is_some())
+}
+
+/// Notes that a draw read the texture at title address `at`.
+pub(crate) fn note_read(at: usize) {
+    if !read_set() {
+        return;
+    }
+    let Some(key) = staging_key(at) else { return };
+    let mut set = READ_TEXTS.lock().unwrap_or_else(|e| e.into_inner());
+    set.get_or_insert_with(Default::default).insert(key);
+}
+
+/// Whether the submission's draws read the texture whose staging key is
+/// `key` — or whether the read set is not in use, in which case: yes.
+pub(crate) fn was_read(key: usize) -> bool {
+    if !read_set() {
+        return true;
+    }
+    let set = READ_TEXTS.lock().unwrap_or_else(|e| e.into_inner());
+    set.as_ref().is_some_and(|s| s.contains(&key))
+}
+
+/// Empties the read set, where a submission's step stream starts.
+pub(crate) fn clear_reads() {
+    if !read_set() {
+        return;
+    }
+    let mut set = READ_TEXTS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(s) = set.as_mut() {
+        s.clear();
+    }
+}
+
+/// The staging key of the texture at title address `at`: its memory pointer,
+/// which is what a `Step::Texture` carries.
+fn staging_key(at: usize) -> Option<usize> {
+    let map = STAGING.lock().unwrap_or_else(|e| e.into_inner());
+    map.as_ref()
+        .and_then(|m| m.get(&at))
+        .map(|s| s.memory as usize)
+}
 
 static STAGING: Mutex<Option<HashMap<usize, Arc<Staging>>>> = Mutex::new(None);
 
@@ -684,6 +737,11 @@ pub(crate) fn upload(list: &HostList, resource: This, texture: &ID3D12Resource) 
 }
 
 impl Staging {
+    /// The key the read set is kept under: this staging's memory pointer.
+    pub(crate) fn memory_key(&self) -> usize {
+        self.memory as usize
+    }
+
     /// The title memory the texture is read from: address and bytes.
     pub(crate) fn memory(&self) -> (usize, usize) {
         (self.memory as usize, self.layout.size as usize)

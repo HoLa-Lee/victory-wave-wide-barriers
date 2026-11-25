@@ -622,3 +622,24 @@ same read-set work the texture refresh still needs.
 What is left after that, from this run's own numbers: preparing 152–218 ms of which textures are
 109–181 ms (the stride does not cover the textures that change every frame), the GPU's 8–68 ms,
 and 726–1,228 draws.
+
+## The read set works as a mechanism and the hook is in the wrong place
+
+`VICTORY_REFRESH_READ_SET=1` skips every texture refresh whose staging no draw marked as read
+(`texture::note_read`, filled from `draw.rs`'s `readable`). On the card, story:
+
+```
+frame: textures 0.0 ms 0.0 MB   (from 917–6,256 ms / 278–830 MB)
+0.8–5.6 fps
+captures: 28,992 and 30,298 bytes — black
+```
+
+So the gate does what it says — all of the 24,821 refreshes disappear — and the picture goes black,
+which means `note_read` is being told about almost nothing. The hook is wrong: `readable` sees the
+views of the *bind* path, while the story's draws read their textures through **descriptor tables**
+(`title + slot * 32`, the path that also does `host.mirror(...)`), and those never reach
+`readable`'s `placed_texture` call.
+
+The fix is one hook, in the table-entry path in `draw.rs` (the place that already computes
+`title + k` and calls `mirror`): mark the texture behind that entry as read. The rest of the
+machinery — the set, the `Step::Texture` gate, the counters — is in place and off by default.

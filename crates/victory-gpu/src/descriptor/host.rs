@@ -1,4 +1,4 @@
-//! Host descriptor heaps behind the title's shader-visible heaps (decision
+﻿//! Host descriptor heaps behind the title's shader-visible heaps (decision
 //! 0007, step 3). Translated shaders index the heaps directly at the
 //! title's descriptor positions, so each host heap keeps the title heap's
 //! order: slot `i` is made from what the title wrote at slot `i`, when it
@@ -2279,6 +2279,19 @@ fn same_placed_texture(a: &View, b: &View) -> bool {
 
 /// A shader view of a texture the title placed in memory itself, as a view
 /// of the resource made for that memory (on first use).
+/// The title address of a placed texture view, for the read set of a frame
+/// (`VICTORY_REFRESH_READ_SET`, see `crate::texture`).
+pub(crate) fn placed_texture_address(view: &View) -> Option<usize> {
+    const BUFFER: u32 = 1;
+    let View::Placed(false, resource, desc) = view else {
+        return None;
+    };
+    if resource[0] == BUFFER {
+        return None;
+    }
+    Some((u64::from(desc[10]) | u64::from(desc[11]) << 32) as usize)
+}
+
 pub(crate) fn placed_texture(view: &View) -> Option<View> {
     const BUFFER: u32 = 1;
     let View::Placed(false, resource, desc) = view else {
