@@ -983,3 +983,30 @@ or "it was written, and the title drew that" (the title's own timing).
 
 `Marvisak/VIctory` at `940d32f` and `fxceless/victory-fork` at `c96b4f2` — no new commits
 since the last check.
+
+### 2026-11-25 10:30: the replay is on the card too — same shape, 30 fps
+
+Same seeded loading screen, same keys, 80 s, this time on the **RTX 4080 SUPER** at a steady
+30.0 fps (33.3 ms a frame), every frame 100–260 captured:
+
+| adapter | frames captured | distinct pictures | frames that changed | of those, equal to three back |
+|---|---|---|---|---|
+| RTX 4080 SUPER, 30 fps | 171 | 14 | 33 | **22 (67 %)** |
+| WARP, 9–30 fps | 161 | 21 | 99 | **82 (83 %)** |
+
+So the three-frame replay is not a software-adapter artefact and not the late/present paths
+(both runs default, `behind=0` throughout). The card shows it too: 22 of the 33 frames that
+move on show the picture from three frames earlier. Holds are longer on the card
+(runs of 38, 85, 9, 4, 3), which is what a faster card does with the same authored content.
+
+**Read together with the frozen refresh counters** (above), the per-frame content the draws
+produce is being fed from something that advances one step per three frames. Texture
+refreshes are not it (zero asked). That leaves the *other* half of the same machinery —
+the buffer/constant ranges a frame's draws read, refreshed per submission from title memory
+(`shadow`'s refreshes, 338 MB a frame, `0 skipped`): if those reach the list one submission in
+three, the draws render the state the title had three submissions ago and the same picture
+comes back, which is exactly the shape measured.
+
+Next probe, cheap: log per submission how many buffer refreshes were asked, how many were
+deferred by `stale_under_flights`/`Batch::texture_due`-style dedup, and the age (in
+submissions) of the oldest refresh a list actually read.
