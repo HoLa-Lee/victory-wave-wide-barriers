@@ -328,3 +328,33 @@ cc940a4  2026-11-25T06:24:11Z  Forge status …
 
 从 13:48 UTC 到现在（01:35 +08:00 = 17:35 UTC）**约 3 小时 47 分**没有新提交，期间监控 14 次（00:24–01:30，每 5 分钟）全部 `sha=5d4c495 / last_comment=7164183778` 无变化。
 → **我们的 `claiming:` 与 `finding:` 两条评论（14:54 UTC）仍在队列里**，不是格式问题。**不需要我们做任何事**；等它恢复会一次性处理积压（`BaggyALPHA` 在同一线程也抱怨过这个滞后）。
+
+## 16. 与上游协作：已发的三条与 FIND-20 的实测（2026-11-26 02:00）
+
+### 16.1 已发到 #1633 的评论
+
+| 评论 | 内容 |
+|---|---|
+| `7165835494` | 报到 + 五条实测 + 两个 claim |
+| `7166001379` | 重叠修正（纹理数字归 `FIND-2`、内存归 `GPU-HOST-MEMORY`、#2471 补 `FIND-3`）+ `claiming: NEW-20` |
+| **`7169959253`** | **把测量挂到已有任务下**（`GPU-SNAPSHOT-COST`：回拷 135–183 ms/63–70 MB、2–3 ms/MB、GATHER 无效、copies 无相邻可合并；`FIND-2`：被写字节占 13–23%、每帧 24,821 次/24.8 GB、`0 skipped`；粒度应为 64 KiB 页掩码）+ **`claiming: FIND-20`** |
+
+### 16.2 为什么之前没被处理（**不是我们的格式**）
+
+`KevinPratap/VIctory`（bot 仓库）的 `default_branch = forge-status`；`claims.yml` 只在这条分支上，cron `*/30`。
+**Claims 工作流最后一次运行 = 13:48:09Z（success），之后再无运行**；而 **16:03Z 有人推了新分支 `xtask/forge-and-claims`**，新版 bot 把触发改成 `issue_comment:[created,edited,deleted]` —— 即在迁移中，还没落到默认分支。
+另外查了 bot 源码 `xtask/src/claims.rs`：`is_id` **要求至少一个连字符**（`GPU` 不是 ID，`GPU-BLACK-WORLD` 是），所以以 `GPU ...` 开头的 `claiming:` 会被当成 one-line claim，不是格式错误。
+
+### 16.3 `FIND-20`（并行下 flaky 的 watch 测试）实测结论
+
+**复现**：`cargo test -p victory-gpu --lib --profile diag --features diagnostics`（默认并行）
+- 全量套件：约 **1/8–1/14** 次失败
+- **把 `warp_*` 测试集中跑（8 线程，20 次）：8 次失败（40%）** ← 集中后放大
+- **失败点会漂移**：`inplace::tests::warp_a_title_buffer_in_place_shows_its_bytes_at_its_offset`（`inplace.rs:1387`，`VirtualFree(MEM_DECOMMIT)` 返回 0）或 `indirect::tests::warp_budget_saturates_without_wraparound_and_preserves_draw_fields`（`indirect.rs:1833`，`assert_eq!(spent, BUDGET_CAP)`）
+
+**结论**：不是某一个测试的 bug，而是**基于 WARP 的测试之间争用进程级 `OnceLock` 缓存**（`indirect::CLAMP`、`inplace` 的 device/rig 缓存等）—— 谁先初始化/谁先释放，另一个就失败。`--test-threads=1` 时未观察到失败。
+
+**下一步（PR 方案，未做）**：
+1. 一个 test-only `Mutex` 把 WARP 设备测试串行化（`inplace`、`indirect` 的 warp 测试、`texture::title_memory_tests`）
+2. 在 `inplace.rs:1387` 的断言里带 `GetLastError`（区分 `ERROR_INVALID_ADDRESS` 与 `ERROR_BUSY`），让 CI 日志直接说出原因
+3. 汇报时把"watch 测试 flaky"更正为"WARP 设备测试互相争用"
