@@ -5822,7 +5822,7 @@ impl<'a> Lower<'a> {
                     if used.is_empty() {
                         continue;
                     }
-                    eprintln!("DESC-USE {} dwords {used:?}", next.name());
+                    eprintln!("DESC-USE {} dwords {used:?} {:?}", next.name(), next.fields);
                     said += 1;
                     if said == 6 {
                         break;
