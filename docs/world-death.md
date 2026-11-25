@@ -163,3 +163,32 @@ its fatal path.
 `0xd421` is the marker the fatal path stores. Finding the branch that reaches it is a matter of
 following the function pointer at `[rsi]` and the two calls the thread entry makes
 (`0x22160b0`, `0x2216160`), which is the next disassembly job rather than another run.
+
+## The fatal path formats `ALERT_ERROR_SUPPORT_0x%x`
+
+Following the trap back with `tools/disasm_rva.py`:
+
+```
+0x23cf620  sub rsp,0x48 ; call 0x2483ea0
+0x23cf629  lea rdx,[rsp+0x28] ; movabs rcx,0x1b5d6844174b453b ; mov r8d,0xc
+0x23cf63e  mov [rdx],rcx ; … ; mov byte [rdx+0xc],1
+0x23cf651  loop: mov byte [rdx+0xd],[rdx]+0xc ; inc rdx ; dec r8 ; jne     (an obfuscated 13-byte blob)
+0x23cf666  call 0x2215950                                                 (decodes / reports it)
+0x23cf66b  cmp byte [rsp+0x34],1
+0x23cf670  jne 0x23cf683                                                  (not 1 -> the trap)
+0x23cf683  mov dword ptr [0],0x4d8bd421
+```
+
+and `0x2215950 → 0x2215980` builds its message from a string table at `0x6778eed`, one entry of
+which is **`ALERT_ERROR_SUPPORT_0x%x`** (`0x6778ed3`).
+
+So the world does not die of a bad draw: it dies because the title reports an **unsupported
+feature alert** (`ALERT_ERROR_SUPPORT_0x…`) and this build's alert path ends in the trap. That
+explains the three unrelated switches landing on the same instruction, the empty breadcrumbs,
+and the silence of the validation layer — nothing is wrong with the GPU commands.
+
+The next step is the alert's **id**: the code around 0x23cf620 (and the callers of it) determine
+which branch of `ALERT_ERROR_SUPPORT` ran, and there are only so many "support" branches a title
+has (`ALERT_ERROR_SUPPORT_0x…` with a numeric class). Reading the 13 obfuscated bytes as data —
+0x3b 0x45 0x4b 0x17 0x44 0x68 0x5d 0x1b 0x4f 0x66 0x65 0xff 0x01, each plus 0x0c — gives a
+candidate id and, with it, the feature the title wants.
