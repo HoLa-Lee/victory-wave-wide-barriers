@@ -1,4 +1,4 @@
-﻿//! Draws on the host GPU (decision 0007, step 3). A list keeps the state
+//! Draws on the host GPU (decision 0007, step 3). A list keeps the state
 //! the title sets for its draws (pipeline, descriptor heaps, root
 //! arguments, vertex and index buffers, targets); each draw then brings the
 //! host list up to date: the host pipeline and our root signature, the
@@ -3024,7 +3024,12 @@ impl State {
                     for (word, chunk) in words.iter_mut().zip(bytes.chunks_exact(4)) {
                         *word = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
                     }
-                    format!(" args {words:?}")
+                    // Whether a submission not yet copied back may be writing
+                    // the very copy this record was read from: if it is, the
+                    // zeros are our copy's, not the record's (the card may
+                    // hold the words the dispatch needs).
+                    let pending = args.writes_pending();
+                    format!(" args {words:?} pending_writes={pending}")
                 } else {
                     " args unreadable".to_owned()
                 }
