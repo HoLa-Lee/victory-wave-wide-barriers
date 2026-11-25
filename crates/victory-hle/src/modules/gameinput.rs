@@ -61,6 +61,36 @@ const DEVICES: usize = PADS + 2;
 const HISTORY: usize = 32;
 const POLL: Duration = Duration::from_millis(8);
 
+/// `VICTORY_PAD_TRACE=1`: once a second, how many scripted keys this poll put
+/// on the first pad and how many have been asked for since the start.
+#[cfg(feature = "diagnostics")]
+fn pad_trace(pressed: u32) {
+    use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+    static INVOCATIONS: AtomicU64 = AtomicU64::new(0);
+    static WITH_KEYS: AtomicU64 = AtomicU64::new(0);
+    static PRESSED: AtomicU64 = AtomicU64::new(0);
+    static LAST: AtomicU32 = AtomicU32::new(0);
+    INVOCATIONS.fetch_add(1, Ordering::Relaxed);
+    if pressed > 0 {
+        WITH_KEYS.fetch_add(1, Ordering::Relaxed);
+        PRESSED.fetch_add(u64::from(pressed), Ordering::Relaxed);
+    }
+    let now = std::time::Instant::now();
+    let _ = now;
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(std::time::Instant::now);
+    let secs = start.elapsed().as_secs() as u32;
+    if secs > LAST.load(Ordering::Relaxed) {
+        LAST.store(secs, Ordering::Relaxed);
+        tracing::info!(
+            second = secs,
+            polls = INVOCATIONS.load(Ordering::Relaxed),
+            polls_with_keys = WITH_KEYS.load(Ordering::Relaxed),
+            keys_pressed = PRESSED.load(Ordering::Relaxed),
+            "the first pad, as the scripted keys left it"
+        );
+    }
+}
 /// The keyboard's stand-in gamepad (virtual key, button); README lists it.
 /// Sticks: W/A/S/D left, I/J/K/L right; triggers Z and C.
 const FALLBACK_BUTTONS: [(u8, u32); 14] = [
@@ -800,7 +830,7 @@ fn forget(this: This, token: u64) {
 extern "system" fn stop_callback(this: This, token: u64) {
     forget(this, token);
 }
-/// Stops the callback, then waits up to `timeout` µs for a call of it that
+/// Stops the callback, then waits up to `timeout` 碌s for a call of it that
 /// is running; false on time-out, or from inside that callback (it cannot
 /// wait for itself), as documented. Either way it is never called again.
 extern "system" fn unregister_callback(this: This, token: u64, timeout: u64) -> bool {
@@ -1152,11 +1182,17 @@ mod host {
             // to the pad (the title's start screen) saw nothing.
             #[cfg(feature = "diagnostics")]
             if slot == 0 {
+                let mut pressed = 0u32;
                 for vk in scripted() {
                     if let Some(&(_, button)) = super::FALLBACK_BUTTONS.iter().find(|(key, _)| *key == vk) {
                         pad.buttons |= button;
+                        pressed += 1;
                     }
                 }
+                // `VICTORY_PAD_TRACE=1`: once a second, what the scripted keys
+                // put on the first pad — the question being whether a title
+                // that ignores the keys on one adapter ever sees them at all.
+                pad_trace(pressed);
             }
             Some(pad)
         }
@@ -1198,7 +1234,34 @@ mod host {
         }
     }
 
-    /// Debugging aid: `VICTORY_KEYS=<seconds>:<key>,...` holds each key for
+    /// `VICTORY_PAD_TRACE=1`: how often anything asked for scripted keys, and how
+/// many were live — the question being whether a title that ignores them ever
+/// asks at all.
+static SCRIPTED_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static SCRIPTED_KEYS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+#[cfg(feature = "diagnostics")]
+fn script_trace() {
+    use std::sync::atomic::Ordering::Relaxed;
+    static LAST: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    let start = START.get_or_init(std::time::Instant::now);
+    let secs = start.elapsed().as_secs() as u32;
+    if secs > LAST.load(Relaxed) {
+        LAST.store(secs, Relaxed);
+        tracing::info!(
+            second = secs,
+            asked = SCRIPTED_CALLS.load(Relaxed),
+            pressed = SCRIPTED_KEYS.load(Relaxed),
+            "scripted keys: how often anything asked"
+        );
+    }
+}
+
+#[cfg(not(feature = "diagnostics"))]
+fn script_trace() {}
+
+/// Debugging aid: `VICTORY_KEYS=<seconds>:<key>,...` holds each key for
     /// 0.2 s that long after input starts, with or without focus. A key is a
     /// letter, a digit, or `Enter`, `Esc`, `Tab`, `Back`, `Up`, `Down`,
     /// `Left`, `Right` (the stand-in pad's table maps them to buttons).
@@ -1231,10 +1294,17 @@ mod host {
         });
         let (start, keys) = &*SCRIPT;
         let now = start.elapsed();
-        keys.iter()
+        let pressed: Vec<u8> = keys
+            .iter()
             .filter(|&&(at, _)| (at..at + Duration::from_millis(200)).contains(&now))
             .map(|&(_, vk)| vk)
-            .collect()
+            .collect();
+        SCRIPTED_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if !pressed.is_empty() {
+            SCRIPTED_KEYS.fetch_add(pressed.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        }
+        script_trace();
+        pressed
     }
 
     /// The foreground window is one of ours (the title's or our fallback).

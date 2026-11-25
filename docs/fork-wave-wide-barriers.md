@@ -1238,3 +1238,21 @@ card measurement past the menus means anything.
 
 What is *not* in doubt: 100–245 s of the card's world-loading phase at 30 fps with 0.0 ms of GPU
 and no device removal, against 7–18 s to removal on `70564ae` and `644ebeb`.
+
+### 2026-11-25 11:05: the keys are produced on the card; nothing polls the pad, and the UI still does not move
+
+Two instruments, one run each, same recipe:
+
+- `VICTORY_PAD_TRACE=1` inside `Source::pad` (the XInput stand-in and the GameInput pad both
+  read through `convert`/`Source::pad`): **zero lines on either adapter** — this title never
+  asks for a pad reading, so the buttons `VICTORY_KEYS` puts there are never seen.
+- the same switch moved to `scripted()` itself: on the **card**, `asked` climbs 120 a second
+  and `pressed` steps **1 → 23 → 47 → 71 → 95 → 118** at the five-second marks, exactly the
+  script — so the keys are produced, and the title's keyboard device is being asked 120 times a
+  second.
+
+So on the card the keys exist and are handed to the keyboard path, and the UI still does not
+move, while the identical script on WARP walks the whole flow. The remaining difference is on
+the consumer side of the keyboard device — next instrument is `focused()` and the per-second
+call count of `keys()` on both adapters, because the one thing that code gates on is whether
+our window is the foreground one.
