@@ -245,3 +245,43 @@ been a different answer: there is no last command.
 That points at the frame's own CPU side (the title between submissions) or at the driver. The next
 probe is what the title thread was doing for those 4.6 s — the frame line already prints the
 frame's own time, and `VICTORY_LOG` can raise the title's own logging if it has any.
+
+## It is memory: 18.4 GB of working set in the last thirty seconds
+
+Sampled free RAM and the process's working set every ten seconds through one default run
+(`VICTORY_D3D12_DRED` off, everything else default):
+
+```
+t=160s free=17.81GB ws= 5.55GB
+t=170s free=17.12GB ws= 6.08GB
+t=180s free=13.93GB ws= 8.39GB
+t=190s free= 7.53GB ws=14.55GB
+t=200s free= 4.78GB ws=18.37GB
+t=210s EXITED        (host GPU device removed)
+```
+
+**Six gigabytes to eighteen in thirty seconds.** The layer's own memory line one second before
+the removal says what it is:
+
+```
+memory: 18983 MB private (18705 MB of it in memory; the PC has 5023 MB free …)
+host copies of title memory: 10 alive 206 MB
+staging of textures: 615 alive 285 MB
+host textures: 23962 alive 10012 MB, 24871 placed in title memory
+made so far: 26167 upload buffers 8972 MB, 11 shared buffers 207 MB, 60 card buffers 430 MB
+```
+
+**23,962 host textures holding 10 GB**, plus 26,167 upload buffers made so far (8.97 GB). The
+story phase asks for tens of thousands of textures, this layer gives every one a host copy, and
+on WARP those copies are system RAM. The device does not fault on a command: it is suspended
+because the host runs out of memory (`0x887A0005`, "the GPU device instance has been suspended").
+
+That closes the investigation this document opened: the fixed moment, the empty breadcrumbs, the
+silent validation layer and the "no last command" are all the same fact — the allocation spike
+comes when the story's assets arrive, and the card dies of the host's memory, not of anything it
+was asked to draw.
+
+The change that follows: the idle sweep already exists (`resource::let_go_idle`, every second,
+threshold `ram_idle_ms`: 10 s normally, 5 s below 4 GiB, 2 s below 2 GiB) and it cannot keep up —
+at 5 GB free it is still using the 10-second window. Dropping the thresholds earlier (or capping
+the host copies' bytes outright) is the experiment: the world should then survive past 210 s.
