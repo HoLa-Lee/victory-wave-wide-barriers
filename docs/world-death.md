@@ -1045,3 +1045,24 @@ doing their job.
 So the next lever is the heap pass, not the textures: half a pass a frame at 420 ms is 40 % of the
 frame's time, and the fork's own commits list "card room for the first world frame" and "view
 marks" work in that area.
+
+## The heap pass is the staging budget: 192 MB a frame costs 420 ms
+
+`VICTORY_TEXTURE_STAGE_MB` (the bytes of texture memory staged per frame, 192 by default) is what
+the heap pass spends its time on. With it at 32, same choreography and data:
+
+```
+3.1 fps, 319.1 ms (preparing 239.6: copies 42.6 ms 106.4 MB, textures 172.3 ms 4.2 MB;
+  GPU 23.6 ms; copy-back 44.2 ms 15.2 MB), 1315 draws, heap buffers 1.0 passes 223.8 ms
+1.1 fps, 884.8 ms (preparing 102.4: copies 34.6 ms 77.6 MB, textures 41.6 ms 2.5 MB;
+  GPU 21.1 ms; copy-back 41.6 ms 9.7 MB), 796 draws,  heap buffers 0.7 passes 111.0 ms
+```
+
+Against the 192 MB run (1.2 fps, 827 ms, heap pass **420.8 ms**): the heap pass falls to 111–224 ms
+and the frame to 319–885 ms. The trade is the backlog: with a third of the budget the index-picked
+textures drain over more frames — the cutscene's textures arrive later, but every frame is cheaper,
+which is what makes the difference between "watchable at 3 fps" and "one frame a second".
+
+So the next question about the heap pass is not how to make it cheaper but **which budget is right
+for a cutscene** — 64 MB is the next point to measure, with a capture at the same frame numbers to
+make sure the pictures still arrive in time.
