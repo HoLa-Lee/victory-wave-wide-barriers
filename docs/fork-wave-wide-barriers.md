@@ -624,6 +624,35 @@ or a surface presented by a path with no HLE at all. Screen capture of the
 flip-model swap chain comes back black, so window enumeration (which HWNDs the
 title owns, and their sizes) is the cheap next probe rather than another run.
 
+### 2026-11-25 09:31: 293 consecutive frames, four pictures — the opening is a still
+
+Every frame 100–400 captured one by one (WARP, 22 s):
+
+```
+293 captures, 4 distinct files:
+  38 × flat colour      frames   1..130
+   4 × 30,298 bytes     frames 131..135   the first picture
+   1 × 34,244 bytes     frame  134        one frame of its own
+ 250 × 39,992 bytes     frames 136..385   the same file, 250 times
+```
+
+250 consecutive frames of one file. The pre-menu opening has **no animation at
+all** in the presented picture — not a slow one, none. That is the end of the
+"present copies the previous frame" theory for this phase: there is nothing to
+lag behind.
+
+The animation the report describes therefore lives in the path that only opens
+once a profile exists: with a seeded `Z:\settings\settings.xml` the title skips
+the setup pages and loads `story000_restofworld.rpf` (the run in the section
+above), and that is the only phase left in which a moving picture exists. The
+measurement to make there is the same one: `VICTORY_CAPTURE_FRAMES` naming a
+run of consecutive frames through the intro, one hash each; at 1.6–1.8 fps a
+frame that goes back would show as a hash repeating a *different* frame's.
+
+One surface only: enumerating the title's windows during boot finds a single
+visible one (`sgaWindowClass`, 2474×1392, our presenter's), so the animation is
+not a second window either.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
