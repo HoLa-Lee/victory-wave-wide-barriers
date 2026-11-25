@@ -1096,3 +1096,29 @@ this build has done in that phase.
 That rate is the honest current cost of the world on the software adapter: the 4.4–5.9 fps this
 report measured earlier was a 39-draw loading-phase scene, not the story. Sixty times slower
 than the 30 fps the menus hold, and the reason the world is the thing to work on next.
+
+### 2026-11-25 11:00: the world's 1.6 fps is the software rasterizer at 4K, and the card does not flinch
+
+Two measurements of the same recipe, same build:
+
+**WARP** (the story-loading phase, 11–12 draws a frame):
+
+```
+627.5 ms/frame = 10.0 preparing (copies 0.3 ms, textures 9.4 ms) + 615.3 on the GPU, 12 draws
+625.3 ms/frame =  4.6 preparing + 618.5 on the GPU, 12 draws
+462.9 ms/frame =  2.2 preparing + 458.6 on the GPU
+1417.4 ms/frame = 196.0 preparing (textures 190.2 ms, 384 MB) + 869.9 on the GPU   (one spike)
+```
+
+The layer's own work is 2–11 ms of it; the rest is the card, which is not a card — it is the
+software rasterizer drawing **3840×2160** frames with a dozen passes. 1.6 fps for that is a
+measurement of WARP, not of the translation.
+
+**RTX 4080 SUPER**, same recipe, 100 s: **30.0 fps, 33.3 ms a frame, 22 draws, 0 black frames,
+0 device removals**, eight world packs opened. The fastest frames are 94.8 ms, the slowest 10.5
+fps, so it holds the frame rate while loading. Earlier reports in this repository have the card
+losing its device within 7–18 s of the same phase on `70564ae` and `644ebeb`; this branch does
+not, in any run so far.
+
+So the world's cost on the software adapter is its rasterizer, and the card's world phase — at
+least up to the story packs, which this run did not reach — is not where it dies.
