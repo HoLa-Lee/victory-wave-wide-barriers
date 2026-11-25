@@ -480,3 +480,67 @@ https://github.com/fxceless/victory-fork/pull/1098 —— 1 文件 **+13/−3**�
 2. **NEW-20**（NVIDIA 世界 TDR）认领了但没交付：要卡上跑到世界 + 逐个测开放 PR，任务原文是"先测哪个开放 PR 修了它，再用 `VICTORY_SKIP_PIPELINES` 收窄"
 3. **copy-back**（135–183 ms / 63–70 MB 每帧）仍是帧里最大项；§14 已定它是延迟不是带宽
 4. 机器人恢复后补：`done: FIND-20 -> #1098`、`#2471`、`#2478`
+
+---
+
+## 19. 本轮（2026-11-26 05:00）：卡上 30 分钟长跑、调试层的四条发现、PR #2790
+
+### 19.1 卡上 30 分钟长跑（新纪录）
+
+`world1`：`VICTORY_FAST=1` + `VICTORY_TEXTURE_STAGE_MB=64` + `VICTORY_INDIRECT_GATHER=1`，1800 秒，§6 键序 + 140 s 之后每 6 秒一次 `Enter` 共 706 个键。
+
+| 项 | 数值 |
+|---|---|
+| 存活 | **1,800 s，0 丢设备 0 陷阱**（原纪录 700–900 s） |
+| 帧 | 中位 **217 ms（4.6 fps）**，最好 **95.7 ms（10.4 fps）**，300 条帧日志 |
+| draws 中位 | 4,511（4,088–5,873） |
+| 帧构成 | copies 46–64 ms / 138–196 MB；**回拷 124–200 ms / 55–82 MB ← 最大项**；GPU 80–121 ms；textures 0.1–0.3 ms |
+| 结论 | 仍然停在过场/字幕，**没进世界**；story_packs=7、world_packs=8 与之前一致。按 `Enter` 刷 30 分钟不推进 |
+
+### 19.2 调试层的四条发现（`dbg1`，`VICTORY_D3D12_DEBUG=1` 跑 240 s）
+
+1. **卡上被拒的管线也是 wave64**：`CreateComputeShader: Shader wants wave lane count of 64 but maximum wave lane count for device is 32`，6 个 compute 管线被拒（`2cc4c197`、`2da4beb3`、`02384a60`、`369cbe90`、`6b82bc7d`、`5dc3b259`），另有 2 个 shader 完全不翻译。→ **paired-wave64（#854 类）不只是 WARP 的事，也是卡上的事**
+2. **一个 mesh/pixel 管线因整数 RT 混合被拒**：`slot 2 = R8_UINT` + 该 slot 开了 blending → `E_INVALIDARG`。→ 已修，见 19.3
+3. **FIND-9 的数字来自设备本身**：`NumDescriptors 2097152, but the limit for shader visible view heaps is 1000000`。`HEAP_VIEWS`=2^21=2,097,152 > NVIDIA 的 1,000,000
+   - `67e8ae1`（main）：两个测试**失败**（196 passed / 2 failed）
+   - `36b1207`/`4d94e2f`（含 `31714de` = triippywhale 的 view-heap clamp）：**198 passed / 0 failed / 6 ignored**
+   - → FIND-9 的修复就是 `31714de`，不是测试写错
+4. **帧里最大的掉帧理由是 RT 结构构建器，且是故意的**：`dropped 227–1412/frame without a host pipeline: a stage of the ray-tracing structure builder, which is off`（`VICTORY_BVH_BUILDER=1` 才开；32-lane 主机建不完整；#2311 见过卡死）
+   - ⚠️ **重要的口径修正**：帧行的 `dropped N without a host pipeline` **主要不是几何丢失，是射线**。§18 与旧文里把它当"丢 draw"读会误导
+
+### 19.3 新 PR #2790：整数渲染目标的混合（已实测）
+
+https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pipeline/host.rs`，+166/−2，head `8aa35fb`，`mergeable`。
+
+- `GraphicsState::settle_integer_targets()`：只对**整数格式**的 RT slot 关掉 `BlendEnable`，在 `describe()` 之前、建任何管线之前执行（所以库里管线名仍描述实际状态）；混合因子保留
+- 两个测试：① 在**真实设备**上直接建那份状态，断言"拒绝 → 关掉该 slot 混合后能建"（机制前后都在一个测试里）② 逐 slot 钉住（整数丢混合、浮点保留、超 `NumRenderTargets` 不动、settle 两次无变化）
+- **卡上 A/B**（同键序同 300 s，旧二进制 `blend0` vs 新 `blend1`）：`host mesh pipeline refused` **20 → 0**，新日志出现 `blending is off for those slots slots=[(2, 62)]`（62 = R8_UINT）；draws 峰值 5,012 → 9,393
+- 验证：`cargo test -p victory-gpu --lib --profile diag --features diagnostics` **198 passed / 0 failed / 6 ignored**；`clippy -p victory-gpu --all-features` clean
+- 注意：`clippy --all-targets` 在 **main 上本来**就红（`victory-formats` 8 参数 `too_many_arguments`），与本改动无关
+
+### 19.4 两个必须记住的新事实
+
+- **我们自己的 main 上已经有 stride 实现**：`bca7e8f GPU: round-robin texture refreshes…`（作者 `VIctory fork`，即我们自己），**不在 Marvisak main**。所以 #2478 是把同一件事送往 Marvisak；若 Marvisak 合并 #2478，将来再合并时要**放弃 `bca7e8f` 那份、保留合入的带 `diagnostics` 门控版本**
+- 卡上二进制现在是 **blend 修复版**（`victory.exe.blendfix`，8/26 04:36）。旧版备份：`C:\Windows\Temp\victory.exe.world1bak`
+
+### 19.5 新 worktree / 产物
+
+| 路径 | 内容 |
+|---|---|
+| `C:\Windows\Temp\pr-blend` | **PR #2790** 的分支 `gpu/integer-target-blend`（`8aa35fb`，基于 `4d94e2f`） |
+| `C:\Windows\Temp\victory.exe.world1bak` | 修复前的卡上二进制（A/B 用） |
+| `C:\Windows\Temp\victory.exe.blendfix` | 修复后的卡上二进制（当前装着的） |
+| `vlogs\world1.*` | 1,800 s 长跑 |
+| `vlogs\dbg1.*` | 调试层 240 s（四条发现的出处） |
+| `vlogs\blend0.*` / `blend1.*` | A/B 的两次 300 s |
+
+### 19.6 已发 #1633
+
+`7174212089`：四条发现 + FIND-9 的对照表 + `finding:` 一行（"调试层的拒绝理由会同时说出 wave64、堆上限与整数混合，WARP-only 的 CI 看不到这三点"）。
+
+### 19.7 下一步
+
+1. 盯 #2471（`merge-candidate`）、#2478（`c8d6571`，等新 triage）、#1098、**#2790**
+2. `FIND-9`：`31714de` 若没别的路径进 main，就是 `main` 上两个 NVIDIA 测试红的唯一原因——可主动提这个 port，或等 fxceless 合
+3. `NEW-20`：现在有了卡侧立足点——**卡上的 compute 拒绝也是 wave64**；下一步该在卡上验 paired-wave64（#854 类）能否把那 6 个管线跑起来
+4. 回拷（124–200 ms / 55–82 MB）仍是帧里最大项；`GPU-SNAPSHOT-COST`/PR #1681 是 @avt0m4t48 的地盘，别重复
