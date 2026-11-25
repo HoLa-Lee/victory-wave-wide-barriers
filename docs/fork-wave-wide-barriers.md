@@ -1503,3 +1503,15 @@ texture on the card is refreshed when the card is full", `VICTORY_STALE_TEXTURES
 says the first room is now lit with its walls and the characters' textures. Merged clean
 (`fe210b7`, 9 files, +1,807/−32), `cargo test -p victory-gpu --lib` 127 passed, and the world
 still dies the same way — so that fix is not this death.
+
+**Correction, same round.** The upload note's `offset 0x3800` is `PlacedFootprint.Offset`, an
+offset **into the staging buffer** (`from staging 0x702600000000+0x3e08` — one shared staging
+buffer serves many uploads), not into the subresource's own bytes. A 6-mip 128×128 BC1 texture
+needs about 0x3000 bytes, so "0x3800 is past the data" was this report reading the wrong field.
+The footprints come from `GetCopyableFootprints` (`texture.rs:151`), the driver's own numbers,
+so the copy itself is shaped correctly — and format `f71` is `DXGI_FORMAT_BC1_UNORM`.
+
+That leaves the other capture as the stronger one: the indirect record with five zero arguments,
+which is what the other session's `f0b20fc` now refuses to issue. If the death survives that
+switch, the upload note is back in play — as a list that ran before the title filled something,
+not as a malformed box.
