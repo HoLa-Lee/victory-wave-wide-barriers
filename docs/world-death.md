@@ -217,3 +217,31 @@ Two things follow. Whoever pursues the memory angle should first check which arm
 came from — the million small blocks the other session measured may be the same artefact. And
 the world's removal still has no explanation that fits: no API error, no page fault reported, no
 allocation failure, and a moment that repeats to within sixteen seconds.
+
+## The sweep is not it either, and the removal comes after 4.6 s of an empty queue
+
+`VICTORY_SWEEP=0` (the idle sweep that lets host copies go — the run before a default removal
+shows it freeing 449 copies / 121 MB, then 315 / 435 MB) kept everything, and the death did not
+move:
+
+```
+SWEEP=0: story_at=178 s  removal_at=213 s  trap=0  E_OUTOFMEMORY=0
+```
+
+against a default 211–227 s. So the sweep is not freeing something the card still reads.
+
+What a default run logs in the seconds before the removal:
+
+```
+the card's clock per frame: nothing of ours queued 4629.7 ms (the card about 18% busy by this count)
+ERROR host GPU device removed … of 0 lists
+```
+
+**4.6 seconds in which our queue held nothing**, then a removal with nothing in flight — and no
+`slow host submission` line anywhere in that run, so it was not one long submission of ours. The
+device goes while this layer is idle, which is why every "what was the last command" reading has
+been a different answer: there is no last command.
+
+That points at the frame's own CPU side (the title between submissions) or at the driver. The next
+probe is what the title thread was doing for those 4.6 s — the frame line already prints the
+frame's own time, and `VICTORY_LOG` can raise the title's own logging if it has any.
