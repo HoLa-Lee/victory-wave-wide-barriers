@@ -307,3 +307,11 @@ What that rules out and what it leaves: it is not one bad command, not the sweep
 policy, not the clamp, not the relay — it is the total footprint of this layer during the story
 load. A fix has to **reduce** the bytes (a cap on host copies, sharing between textures that come
 from one memory, or not staging what will not be read this frame), not reschedule them.
+
+## The measurement, as a tool
+
+`tools/world_ram.ps1 -Tag mem1 -Seconds 340 [-IdleMs 1000] [-Warp]` runs the route above and
+samples free RAM and the process's working set every ten seconds, printing the layer's last
+memory line and where the run failed. Every number in this document that mentions gigabytes came
+from that loop or from the `memory:` line it prints at the end; anyone re-running the
+investigation should start there rather than at the disassembly.
