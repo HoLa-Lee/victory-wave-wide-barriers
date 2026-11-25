@@ -1024,3 +1024,24 @@ playing on its own, as it should.
 
 This is where the branch stands: the flow runs, the saves commit, the world streams, and the
 opening cutscene renders.
+
+## What a cutscene frame is made of now
+
+```
+1.2 fps, 827.2 ms/frame
+  preparing 361.3 ms   (copies 61.4 ms / 158.3 MB, textures 249.3 ms / 15.3 MB)
+  on the GPU 61.4 ms
+  copying back 92.5 ms / 64.7 MB
+  heap buffers 0.5 passes 420.8 ms
+  2,072 draws, 270 dropped without a host pipeline, 0 indirect
+  textures picked by index: 250,878 uploaded (109,673 MB), 12,427 waiting
+```
+
+**The heap pass is now the largest single item** — 420.8 ms of an 827 ms frame (it runs every other
+frame: 0.5 passes a frame) — with preparing at 361 ms and the copy-back at 92.5 ms behind it. The
+texture read is 249 ms of the preparing and moves 15 MB, which is the sample skip and the stride
+doing their job.
+
+So the next lever is the heap pass, not the textures: half a pass a frame at 420 ms is 40 % of the
+frame's time, and the fork's own commits list "card room for the first world frame" and "view
+marks" work in that area.
