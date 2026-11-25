@@ -975,3 +975,32 @@ So the next step is the focus movement on that page, not the page itself: one of
 end up ticked (the privacy one ticked, the terms one ticked too) before the confirm button is
 enabled. Trying the **left stick** (`S`/`W`) for the focus move, since `Down` scrolls the text
 instead, is the next run.
+
+## The game's opening cutscene renders on the card
+
+With the stick axes wired into `VICTORY_KEYS` and this schedule —
+
+```
+60–200 s: Up, Enter, Up, Enter, Down, Down, Enter every 10 s   (past the first pages)
+245 s: S            (left stick down: focus to the second terms row)
+255 s, 268 s: Enter (tick it, then confirm)
+285 s onward: Enter every 10 s
+```
+
+— a 600 s card run gets through the terms page, shows the little loading spinner at frame 4800
+(31 KB, dark), and then **frame 5400 is the game itself**: a character's head and shoulders in
+close-up, a lit room and a sunset through a window, rendered by the translated shaders at
+
+```
+0.6–0.8 fps, 1220.3–1813.3 ms a frame (preparing 405.3–481.7: copies 67.8–74.3 ms 189.9–204.4 MB,
+  textures 291.0–356.4 ms 24.4–25.7 MB; GPU 35.3–70.0 ms; copy-back 109.2–115.2 ms)
+```
+
+So the branch now goes: language → legal notices → … → terms (scroll/tick) → loading → **the opening
+cutscene**, on the real GPU, with no device removal and no trap. The fps is 0.6–0.8 in the cutscene,
+and the frame is copies (68–74 ms), the GPU (35–70 ms) and the copy-back (109–115 ms) — the same
+three costs as before, now with content that is worth optimising for.
+
+Two things made the difference, both this session's: **the pad sticks the scripted keys now move**
+(without them the terms page cannot be accepted) and **`VICTORY_FAST=1`** (without it the cutscene
+would run at a tenth of a frame a second).
