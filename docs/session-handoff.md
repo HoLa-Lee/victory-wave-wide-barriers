@@ -423,3 +423,60 @@ Invoke-RestMethod "https://api.github.com/repos/Marvisak/VIctory/issues/1633" -H
 - **不要**把这个文件（或其副本）提交到仓库 —— `victory-fork-history/docs/session-handoff.md` 是**去掉了 token 的版本**，每次同步时要保持这一点
 - 该 token 只能用于 `HoLa-Lee` 名下仓库与公开 API 读；对 `Marvisak/VIctory` **无写权限**（所以只能开 PR，不能直接评论到别人的 issue 之外的操作——评论可以，issue 评论走公开仓库是允许的）
 - 若泄漏：GitHub → Settings → Developer settings → Tokens 里立即 revoke 并重新签发
+
+---
+
+## 18. 本轮（2026-11-26 03:25）：#2478 按分诊改完重推；FIND-20 结案成 PR #1098
+
+### 18.1 PR #2478（纹理刷新步长）——`needs-work` 四条全部处理，head **`c8d6571`**
+
+| 评审要求 | 处理 |
+|---|---|
+| 放到 `diagnostics` 门控后面 | `due()` 里 `#[cfg(feature = "diagnostics")]`；非 diagnostics 构建直接返回 `true`，连 env 都不读 |
+| 检查要在 `refresh_all` 里、`in_parallel` 之前 | `changed` 过滤改成 `due() && maybe_changed()`；`refresh()` 里那份检查删掉，不再把不该刷的纹理交给线程 |
+| 恢复行尾换行 | 已恢复；提交的 blob 全 LF（907 行），`git diff --check` 干净 |
+| kotekompotek：`EVERY=0` 会走到取模；丢行尾 | `.filter(|&n| n > 0).unwrap_or(1)`，0/1 都等于"每帧" |
+| kais7654：clippy 1.98 `manual_is_multiple_of` | 改成 `.is_multiple_of(every)` |
+
+本地实测：`cargo check -p victory-gpu`（默认 feature）通过；`--profile diag --features diagnostics` 通过；`cargo clippy -p victory-gpu --all-targets --all-features -- -D warnings` **0 警告**；`cargo test -p victory-gpu --lib --profile diag --features diagnostics` **196 passed / 2 failed / 1 ignored**（那 2 个是 #1744 view-heap，main 上同样失败）。
+
+PR 正文重写（回应四条 + 验证数字），并回评 kotekompotek / kais7654（评论 `7172061568`）。triage 会针对新 head 再跑一次。
+
+### 18.2 FIND-20 结案：不是并发、不是缓存、不是适配器——是测试锁定了 GPU 不保证的次序
+
+- **适配器始终是 WARP**：`Microsoft Basic Render Driver`，vendor `0x1414`、device `0x8c`、flags `0x2`（两个 harness 现在都会打印）→ "某些运行用了非 WARP 适配器"假设彻底死掉
+- **失败的断言不是 `spent`**：`spent == BUDGET_CAP` 每次都过；失败的是 `assert!(i == 1 || i == 2, "the first two real draws fit the budget")`
+- **哪个 record 先计费由 GPU 决定**：并行 lane 的 atomic add，先到的 64 组先算。单测独跑 15 次 → record **1/2 中奖 4 次**、**64/65 中奖 11 次**，`spent` 15 次全对
+- 另一个候选 `inplace::tests::warp_a_title_buffer_in_place...`（`VirtualFree(MEM_DECOMMIT)` 返回 0）单跑 **20/20 通过**，且打印了 `VirtualQuery` 状态 / `ResetWriteWatch` / `GetLastError` → 不牵连
+- **修法**：断言改成"固定事实"——两张 `1<<26` 的 record 放进 `1<<27`；恰好两张保留、其余整张清零；预算饱和不回绕；空的首个 record 不计费；其余字不丢；失败信息带上实际中奖的 record
+- **结果**：该测试单跑 **25/25**；`victory-gpu` lib **198 passed / 0 failed / 6 ignored**，并行 4 次 + `--test-threads=1` 4 次全绿（改前 20 次里 13 次失败）
+
+### 18.3 新 PR：**#1098** → `fxceless/victory-fork`
+
+https://github.com/fxceless/victory-fork/pull/1098 —— 1 文件 **+13/−3**，`mergeable=True`，CI 未跑（fork PR 同样要维护者批准）。
+`inplace.rs` 与 `warp_*` 测试**只在 fork 那条线上**（Marvisak main 没有），所以提给 fxceless。
+为此新开了 fork **`HoLa-Lee/victory-fork`**（`fork=true`，parent `fxceless/victory-fork`），用同一个 token push 分支 `tests/budget-charges-any-two` = `f1f95fe`（基于 `d510ee4`）。
+
+### 18.4 已发 #1633
+
+`7172251680`：FIND-20 的测量表 + 结论 + `done: FIND-20 -> .../pull/1098`。机器人仍停在 `sha=5d4c495`（13:48Z），这条也在队列里。
+
+### 18.5 新 worktree
+
+| 路径 | 内容 |
+|---|---|
+| `C:\Windows\Temp\pr-budget` | **PR #1098** 的分支 `tests/budget-charges-any-two`（`f1f95fe`，基于 `d510ee4`） |
+| `C:\Windows\Temp\find20` | FIND-20 的插桩树（detached `dddbb01`），运行日志在 `find20\logs`（改前）与 `find20\logs2`（带插桩） |
+| `C:\Windows\Temp\pr-warp` | **旧的加锁 + GetLastError 补丁还在，已被证伪，不要再推** |
+
+### 18.6 两个新坑
+
+- **PowerShell 执行策略**：`& xxx.ps1` 直接 PSSecurityException → 用 `pwsh -ExecutionPolicy Bypass -File`，或把循环写成内联命令
+- **fork 线（`d510ee4`）的 clippy 本来就不干净**：8 个 `manual_is_multiple_of` + 1 个 dead_code，`-D warnings` 直接红。**"clippy 0 警告"只在 main 线（Marvisak）成立**，别拿它当 fork 线的门槛
+
+### 18.7 下一步（更新后的顺序）
+
+1. 盯 **#2471**（`merge-candidate`，只等维护者批 CI）、**#2478**（`c8d6571`，等新 triage）、**#1098**（`f1f95fe`）
+2. **NEW-20**（NVIDIA 世界 TDR）认领了但没交付：要卡上跑到世界 + 逐个测开放 PR，任务原文是"先测哪个开放 PR 修了它，再用 `VICTORY_SKIP_PIPELINES` 收窄"
+3. **copy-back**（135–183 ms / 63–70 MB 每帧）仍是帧里最大项；§14 已定它是延迟不是带宽
+4. 机器人恢复后补：`done: FIND-20 -> #1098`、`#2471`、`#2478`
