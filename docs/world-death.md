@@ -1135,3 +1135,23 @@ read is now 0.1–0.2 ms (it was 200–400 ms), the copy-back 125–158 ms and t
 That is the shape of the thing now: the layer's own processor work has been taken out of the
 picture, and what is left is what the card does (90–115 ms) plus the memory this design moves
 (154 MB up, 61 MB back, 60 ms each way).
+
+## After the merge the flow keeps going: the opening credits crawl
+
+The same merge, a compressed keyboard schedule (the pages come faster now that frames do) —
+`Up,Enter,Up,Enter,Down,Down,Enter` every 8 s from 40 s, then `S` at 108, `Enter` at 115 and 125,
+then `Enter` every 8 s — reaches **the credits**:
+
+```
+2.5 fps, 407.1 ms (preparing 100.9: copies 53.2 ms 127.6 MB, textures 22.4 ms 8.7 MB;
+  GPU 68.6 ms; copy-back 84.4 ms 32.5 MB), 3,377 draws
+2.7 fps, 371.4 ms (preparing 70.7: copies 37.7 ms 93.0 MB, textures 7.2 ms 8.7 MB;
+  GPU 90.8 ms; copy-back 104.6 ms 35.5 MB), 4,266 draws
+```
+
+and frame 4200 is the title's **credit crawl** — “Director of Music / Ivan Pavlovich”, “Music /
+david scott / tony mesones” in pink neon over a night scene with trees and fireflies
+(`docs/credits-crawl.png`). Text, alpha, glow and the scene behind it all render.
+
+So after the fork's performance night the branch runs the whole opening — loading, cutscene, credits
+— at 2.5–7.9 fps depending on the shot, with the pictures right and no removal.
