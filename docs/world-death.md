@@ -1111,3 +1111,27 @@ What that produces, measured: 0.9–1.4 fps in the opening cutscene with the pic
 past every setup page, saves committed, and seven hundred seconds without a device removal or a
 trap. That is where this branch stands, and the docs beside this one say what is left
 (`next-steps.md`) and what was ruled out on the way (`world-death.md`).
+
+## The fork's second performance night lands: 1 fps becomes 4.5
+
+Merged `f85101b` ("a submit thread of the layer's own, a copy queue for fetches, indirect draw
+windows made safer, a profiler"), removed the two `indirect::done` calls it retired, and ran the
+cutscene again with the same switches (`VICTORY_FAST=1`, `VICTORY_TEXTURE_STAGE_MB=64`):
+
+```
+4.3 fps, 235.0 ms (preparing 95.9: copies 58.4 ms 154.3 MB, textures 0.2 ms 0.1 MB;
+  GPU 93.5 ms; copy-back 143.3 ms 61.3 MB), 5,120 draws, 360 dropped
+4.2 fps, 235.7 ms (preparing 97.3: copies 62.9 ms 154.9 MB, textures 0.1 ms 0.0 MB;
+  GPU 115.3 ms; copy-back 158.5 ms 64.0 MB), 4,822 draws, 370 dropped
+4.7 fps, 211.2 ms (preparing 99.5: copies 60.4 ms 167.5 MB, textures 0.2 ms 0.0 MB;
+  GPU 89.6 ms; copy-back 124.9 ms 60.8 MB), 5,011 draws, 366 dropped
+```
+
+**4.2–4.7 fps a frame of 211–236 ms**, against the 0.9–1.4 fps and 703–900 ms measured before the
+merge, with the same switches and the same route: three to four times the frame rate. The texture
+read is now 0.1–0.2 ms (it was 200–400 ms), the copy-back 125–158 ms and the GPU 90–115 ms, over
+4,800–5,100 draws a frame.
+
+That is the shape of the thing now: the layer's own processor work has been taken out of the
+picture, and what is left is what the card does (90–115 ms) plus the memory this design moves
+(154 MB up, 61 MB back, 60 ms each way).
