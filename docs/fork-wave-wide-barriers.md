@@ -1711,3 +1711,17 @@ from a stale copy, and skipping it makes the title's own downstream logic run on
 got. The fix that follows is not "skip" and not "refresh at submit": it is to read the indirect
 arguments from the card's memory when they are GPU-written, which is the one path this layer has
 never taken.
+
+### 2026-11-25 13:45: the tree is green at `d354ec3`, and the bundle is refreshed
+
+`cargo test --workspace --lib --profile diag --features diagnostics` on this branch, after the
+fork's `310c6eb` and everything since:
+
+```
+11 + 24 + 3 + 127 + 101 + 25 + 7 + 4 + 215 = 517 passed, 0 failed, 9 ignored
+```
+
+`patches/victory-wave-wide-barriers.bundle` is rebuilt from this HEAD (2.14 MB, `main` =
+`d354ec3`, 69 commits ahead of the GitHub `main`) and verified by cloning it: the clone's `HEAD`
+is `d354ec3` and the count is 69. `patches/README-unpushed.md` says how to push it — the one
+thing this session never could, because the stored credential has read access only.
