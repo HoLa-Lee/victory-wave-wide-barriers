@@ -358,3 +358,24 @@ cc940a4  2026-11-25T06:24:11Z  Forge status …
 1. 一个 test-only `Mutex` 把 WARP 设备测试串行化（`inplace`、`indirect` 的 warp 测试、`texture::title_memory_tests`）
 2. 在 `inplace.rs:1387` 的断言里带 `GetLastError`（区分 `ERROR_INVALID_ADDRESS` 与 `ERROR_BUSY`），让 CI 日志直接说出原因
 3. 汇报时把"watch 测试 flaky"更正为"WARP 设备测试互相争用"
+
+### 16.4 FIND-20 追到底：**没有发 PR，因为假设被自己证伪**
+
+写 PR 之前先验证，结果**锁不是解药**：
+
+| 实验 | 结果 |
+|---|---|
+| 加 test-only mutex（`lib.rs` 的 `test_sync::WARP`）+ 18 个 `warp_*` 测试各持锁 | **16/20 仍失败**（无锁时 15/20）→ **并发假设证伪** |
+| 每次跑前删 `%LOCALAPPDATA%\D3DSCache` | 3/4 失败；不删则 2/3 通过 → **着色器缓存假设证伪** |
+| 检查是否"没等 GPU" | 两套 Rig 都已 `Signal` + `SetEventOnCompletion` + `WaitForSingleObject` → **假设证伪** |
+| **单测独跑（`--test-threads=1`）** | **约 3/4 失败** → **是每进程随机，不是并发** |
+
+**真正失败的断言**（都是"GPU 写出来的值"）：
+- `inplace.rs:1387`：`VirtualFree(base+2*K64, K64, MEM_DECOMMIT)` 返回 0
+- `indirect.rs:1833`：`assert_eq!(spent, BUDGET_CAP)`，读回 **0**
+
+**重要事实**：这些测试**不在 `Marvisak/VIctory` 的 main 上**（`inplace.rs` 与 `warp_*` 测试来自 fork 那条线），所以修它应该提给 fork，而不是 main。
+
+**已发更正**（`#1633#issuecomment-7171829690`）：FIND-20 的描述要改成"不是 watch 测试、不是并发"；下一步是**在断言处打印 GPU 到底返回了什么**（`spent`/`out_words` 的五个字 + `GetLastError`），并核对 `indirect` 的 rig 是否在某些运行里用了**非 WARP 适配器**（"每进程 60–75%"的失败率更像"用错了设备/管线"，不像竞争）。
+
+**未用的补丁**：`C:\Windows\Temp\pr-warp`（d510ee4）与 `pr-warp-465`（465b94f）两个 worktree 里都有"加锁 + decommit 带 GetLastError"的改动，**没有推送** —— 留作下次继续的起点。
