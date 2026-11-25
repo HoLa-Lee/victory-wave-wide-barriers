@@ -539,3 +539,25 @@ frame does not use**. The layer already collects, per frame, the textures whose 
 computes which slots the draws actually read (the `readable`/`used` analysis in `draw.rs`). What
 is missing is the intersection: refresh what the frame reads, let the rest wait for the frame that
 reads them.
+
+## Round-robin refreshes: 0.1–0.4 fps becomes 1.9–6.9 fps
+
+`VICTORY_TEXTURE_REFRESH_EVERY=8` reads a texture once every eight frames at most, the phase taken
+from the texture's own address so the frames divide the work instead of one frame taking it all.
+Card, story, with `VICTORY_TEXTURE_SAMPLE_SKIP=1` as well:
+
+| | before | with the stride |
+|---|---|---|
+| frame | 2333.8–6906.0 ms | **145.5–522.4 ms** |
+| fps | 0.1–0.4 | **1.9–6.9** |
+| of that, textures | 917.4–6255.7 ms, 278.5–830.0 MB | **17.3–384.9 ms, 0.0–0.6 MB** |
+| draws | 5591–6564 | 896–1153 |
+| dropped without a pipeline | 985–1512 | 80–106 |
+
+**The texture read was the frame**, exactly as the counters said: take it out and the card's
+story goes from a tenth of a frame a second to a few frames a second, with the GPU doing 29–46 ms
+and 40–100 MB of copy-back being the next cost to look at.
+
+The price is staleness: a texture's screen content can lag by up to eight frames, which at 6 fps
+is about a second. That is a measurement switch, not a final policy — the policy the numbers point
+at is still "refresh what the frame reads", with the stride only as the fallback for the rest.
