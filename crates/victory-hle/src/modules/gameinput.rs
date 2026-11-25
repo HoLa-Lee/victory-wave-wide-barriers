@@ -1,4 +1,4 @@
-//! `gameinput.dll`: input devices from the host. Gamepads come from XInput
+﻿//! `gameinput.dll`: input devices from the host. Gamepads come from XInput
 //! (host slots 0-3); while none is connected, the keyboard drives one
 //! stand-in gamepad (`FALLBACK_BUTTONS`). The keyboard is a device of its own
 //! too. A poll thread turns host state into readings (a new one per change)
@@ -830,7 +830,7 @@ fn forget(this: This, token: u64) {
 extern "system" fn stop_callback(this: This, token: u64) {
     forget(this, token);
 }
-/// Stops the callback, then waits up to `timeout` 绾板 for a call of it that
+/// Stops the callback, then waits up to `timeout` 缁炬澘顔?for a call of it that
 /// is running; false on time-out, or from inside that callback (it cannot
 /// wait for itself), as documented. Either way it is never called again.
 extern "system" fn unregister_callback(this: This, token: u64, timeout: u64) -> bool {
@@ -1188,9 +1188,24 @@ mod host {
                         pad.buttons |= button;
                         pressed += 1;
                     }
+                    // The same letters move the sticks, as they do on the
+                    // stand-in pad: a title that polls this pad needs a stick
+                    // to scroll with (the terms page refuses to go on
+                    // otherwise, docs/world-death.md).
+                    match vk {
+                        b'D' => pad.left_x = 1.0,
+                        b'A' => pad.left_x = -1.0,
+                        b'W' => pad.left_y = 1.0,
+                        b'S' => pad.left_y = -1.0,
+                        b'L' => pad.right_x = 1.0,
+                        b'J' => pad.right_x = -1.0,
+                        b'I' => pad.right_y = 1.0,
+                        b'K' => pad.right_y = -1.0,
+                        _ => {}
+                    }
                 }
                 // `VICTORY_PAD_TRACE=1`: once a second, what the scripted keys
-                // put on the first pad 閳?the question being whether a title
+                // put on the first pad 闁?the question being whether a title
                 // that ignores the keys on one adapter ever sees them at all.
                 pad_trace(pressed);
             }
@@ -1252,7 +1267,7 @@ fn key_hold() -> std::time::Duration {
 }
 
 /// `VICTORY_PAD_TRACE=1`: once a second, whether our window is the foreground
-/// one and how many scripted keys the keyboard device was given 鈥?the two
+/// one and how many scripted keys the keyboard device was given 閳?the two
 /// facts that differ between an adapter whose menus move and one whose do not.
 #[cfg(feature = "diagnostics")]
 fn keys_trace(focused: bool, scripted: usize) {
@@ -1284,7 +1299,7 @@ fn keys_trace(focused: bool, scripted: usize) {
 }
 
 /// `VICTORY_PAD_TRACE=1`: how often anything asked for scripted keys, and how
-/// many were live 閳?the question being whether a title that ignores them ever
+/// many were live 闁?the question being whether a title that ignores them ever
 /// asks at all.
 static SCRIPTED_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static SCRIPTED_KEYS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

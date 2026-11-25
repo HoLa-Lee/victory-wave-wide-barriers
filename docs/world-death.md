@@ -957,3 +957,21 @@ fits: focus moved, the text did not scroll, and the checkbox stayed disabled.
 **That makes the next piece of work an HLE gap, not a game mystery**: the title's UI needs a gamepad
 device to scroll with. Advertising one (so `GameInput` reports a pad our stand-in fills) is what
 unlocks every page of this flow — and with it, presumably, the first playable frame.
+
+## The scripted keys now move the sticks, and the terms page answers to them
+
+`VICTORY_KEYS` already pressed the first pad's buttons (that is why `Enter` works as A), but it
+never touched the stick axes — so no title that scrolls with a stick could be driven. It does now:
+`D`/`A` and `W`/`S` give the left stick, `L`/`J` and `I`/`K` the right one, the same letters the
+stand-in pad's table uses.
+
+Proof that the page hears it: with `K` then `Enter` every two seconds on the terms page, the run's
+frame at 3600 stopped being the earlier picture and the **privacy-policy checkbox went from ticked
+to unticked** — a control the keyboard alone had never touched. Following that up with
+`Enter, Down, Enter, Enter…` still leaves the page on screen (frame 3900, 1,728,729 bytes), so
+`Enter` toggles whichever row has focus and `Down` is not moving the focus between the two rows.
+
+So the next step is the focus movement on that page, not the page itself: one of the two boxes must
+end up ticked (the privacy one ticked, the terms one ticked too) before the confirm button is
+enabled. Trying the **left stick** (`S`/`W`) for the focus move, since `Down` scrolls the text
+instead, is the next run.
