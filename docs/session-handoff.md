@@ -379,3 +379,25 @@ cc940a4  2026-11-25T06:24:11Z  Forge status …
 **已发更正**（`#1633#issuecomment-7171829690`）：FIND-20 的描述要改成"不是 watch 测试、不是并发"；下一步是**在断言处打印 GPU 到底返回了什么**（`spent`/`out_words` 的五个字 + `GetLastError`），并核对 `indirect` 的 rig 是否在某些运行里用了**非 WARP 适配器**（"每进程 60–75%"的失败率更像"用错了设备/管线"，不像竞争）。
 
 **未用的补丁**：`C:\Windows\Temp\pr-warp`（d510ee4）与 `pr-warp-465`（465b94f）两个 worktree 里都有"加锁 + decommit 带 GetLastError"的改动，**没有推送** —— 留作下次继续的起点。
+
+---
+
+## 17. 读这份 handoff 前必看：§1–§14 里已过时的四个点（2026-11-26 03:15 校正）
+
+| 位置 | 过时内容 | 现在的事实 |
+|---|---|---|
+| §2 仓库状态 | `main = f43e51d` | **`main = 9fe6156`**（远端 owner 同为 `9fe6156`） |
+| §2 上游 | `Marvisak main = 67e8ae1`、`fxceless main = 465b94f`（已合并成 36b1207） | **`Marvisak main = 13f91ca`**、**`fxceless main = d510ee4`**（两者都又前进了；36b1207 之后我们只做过文档提交） |
+| §2 worktree | 只列了 `pr-logging`、`pr-stride` | 另有 **`C:\Windows\Temp\pr-warp`**（分支 `tests/warp-tests-take-turns`，基于 d510ee4）与 **`pr-warp-465`**（detached 465b94f）—— FIND-20 的未推送补丁在这两个里 |
+| §8 测试数 | "547 通过" | 那是某次合并时的全 workspace 数；**`victory-gpu` 单元测试现在是 196 passed / 6 ignored**（含上游新测试），全 workspace 会更多 |
+
+### 另有两件 handoff 里没写、但新会话必须知道的事
+
+1. **push 用的 token 不在文件里**（安全考虑）。命令模板：
+   `git push "https://HoLa-Lee:<TOKEN>@github.com/HoLa-Lee/victory-wave-wide-barriers.git" HEAD:main`
+   本会话用的是 classic PAT（`ghp_…`，45 字符级），`owner` remote 的 URL 里也存了一份（要清：`git remote set-url owner https://github.com/HoLa-Lee/victory-wave-wide-barriers.git`）。**没有 token 就无法推送**，也无法读 `CLAIMS.md`（需 GitHub API 认证）。
+2. **定时任务 `schedule-f4d26af3…`（"继续推进 VIctory 首启流程与上游同步"）是 `paused` 且内容全过时**（还写着 rpcrt4、未推 commit、Z:\settings 调查）。**不要去恢复它**；当前会话靠 goal 轮次推进。
+
+### 还有一条判断口径要继承
+
+`FIND-20` 里那条"不是并发、不是缓存、不是没等 GPU"的结论，是**用三次实验证伪**出来的；同理，本项目里任何"看起来是竞争"的现象，先做**单进程重复**实验再下结论（单测独跑 3/4 失败这一步就推翻了并发的直觉）。
