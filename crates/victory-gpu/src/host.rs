@@ -1,4 +1,4 @@
-//! The host GPU: one D3D12 device and direct queue (decision 0007), and a
+﻿//! The host GPU: one D3D12 device and direct queue (decision 0007), and a
 //! window to present on.
 //!
 //! shortcut: every submission is waited for, so CPU and GPU never overlap
@@ -144,6 +144,15 @@ pub(crate) fn vram_idle_ms(video_memory: Option<[u64; 4]>) -> u64 {
 /// buffers, loose shadows, and the mapped pipeline library), scaled down
 /// when free physical RAM is low. Never returns less than 2,000 ms.
 pub(crate) fn ram_idle_ms(avail_phys: Option<u64>) -> u64 {
+    // `VICTORY_IDLE_MS`: how long a host copy of a title texture may sit
+    // unused before the sweep lets it go, instead of the thresholds below.
+    // The world's story asks for tens of thousands of textures at once and
+    // the defaults cannot keep up (see docs/world-death.md).
+    if let Some(ms) = std::env::var_os("VICTORY_IDLE_MS")
+        .and_then(|v| v.to_string_lossy().trim().parse::<u64>().ok())
+    {
+        return ms;
+    }
     const GIB: u64 = 1024 * 1024 * 1024;
     const NORMAL_MS: u64 = 10_000;
     const MODERATE_MS: u64 = 5_000;
@@ -1735,7 +1744,7 @@ fn present_trace() -> bool {
 }
 
 /// `VICTORY_PRESENT_FENCE=1`: a present settles the submissions sent ahead
-/// again, even at [`late_free_present`]'s stage 3 — the copy to the back
+/// again, even at [`late_free_present`]'s stage 3 鈥?the copy to the back
 /// buffer then reads a host copy whose refreshes are all in, and the frame
 /// cannot be one old. Measured on this machine's menus (RTX 4080 SUPER,
 /// 25 s): `VICTORY_RELAY=1` alone presents 672 frames with the card a

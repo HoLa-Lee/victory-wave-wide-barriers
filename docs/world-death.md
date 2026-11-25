@@ -285,3 +285,25 @@ The change that follows: the idle sweep already exists (`resource::let_go_idle`,
 threshold `ram_idle_ms`: 10 s normally, 5 s below 4 GiB, 2 s below 2 GiB) and it cannot keep up —
 at 5 GB free it is still using the 10-second window. Dropping the thresholds earlier (or capping
 the host copies' bytes outright) is the experiment: the world should then survive past 210 s.
+
+## Evicting sooner does not help — it only moves the memory into staging
+
+`VICTORY_IDLE_MS=1000` (a new switch: the idle window for letting host copies go, instead of the
+`ram_idle_ms` thresholds) through the same run:
+
+```
+story_at=178 s  removal_at=212 s   (default: 211–227 s)
+max working set 15.0 GB (default 18.4), min free RAM 7.2 GB
+memory at the removal: 21995 MB private, the PC has 1029 MB free
+  staging of textures: 11110 alive 4277 MB      (default: 615 alive 285 MB)
+  host textures: 19280 alive 855x MB            (default: 23962 alive 10012 MB)
+```
+
+Host copies went down by 2 GB and **staging went up by 4 GB** — the copies are simply uploaded
+again — and the process still ends with **1 GB of free RAM** and the same 212 s removal. So the
+wall is the host's memory, and eviction alone only changes which allocator holds it.
+
+What that rules out and what it leaves: it is not one bad command, not the sweep, not the idle
+policy, not the clamp, not the relay — it is the total footprint of this layer during the story
+load. A fix has to **reduce** the bytes (a cap on host copies, sharing between textures that come
+from one memory, or not staging what will not be read this frame), not reschedule them.
