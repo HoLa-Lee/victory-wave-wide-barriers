@@ -345,3 +345,27 @@ answer to "why does the world die at 212 seconds".
 
 On the card the same duplicate would land in 16 GB of VRAM — which is the number to watch when
 that path is measured next.
+
+## A hard cap on host copies: it sheds what is idle, not what is in use
+
+`VICTORY_HOST_TEXTURE_CAP_MB` (new switch) makes `resource::let_go_idle` let a copy go as soon as
+nothing holds it once the alive bytes pass the budget, instead of waiting out the idle window.
+With 5,000 MB, same run:
+
+```
+story_at=178 s   removal_at=215 s   (default 211–227 s)   max working set 15.6 GB (18.4 before)
+memory at the removal: 16303 MB private, 6791 MB free
+  staging of textures: 15 alive 6 MB        (default 615 alive 285 MB — the cap does clear these)
+  host textures: 16792 alive 7452 MB        (still above the 5 GB budget)
+```
+
+Two readings. The cap works on what it can reach — staging went from 285 MB to 6 MB, and the
+process's peak fell by 3 GB. And it **cannot** reach the rest: 16,792 copies holding 7.4 GB are
+held by lists and slots (`Arc::strong_count == 1 && references == 1` is the only condition under
+which a copy may go), so the budget is a floor, not a ceiling, and the removal stays at 215 s.
+
+Together with the earlier arms this settles the shape of the problem: at that moment the world
+*needs* on the order of ten gigabytes of texture copies plus nine of upload buffers, and this
+machine on WARP cannot give it (16–19 GB private, 1–7 GB free, then `0x887A0005`). The card has
+16 GB of VRAM — the one path that might fit — and its menus cannot yet be driven by scripted keys
+(see the input section above).

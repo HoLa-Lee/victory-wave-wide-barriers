@@ -1,4 +1,4 @@
-//! Heaps, committed and placed resources, and resource sizes.
+﻿//! Heaps, committed and placed resources, and resource sizes.
 //!
 //! Heaps and resources are host memory and a resource's GPU address is its
 //! CPU address, as on the console; textures also get a host copy, and
@@ -1638,6 +1638,12 @@ pub(crate) fn let_go_idle() {
         return;
     }
     let idle_ms = crate::host::vram_idle_ms(crate::host::host().and_then(|h| h.video_memory()));
+    // `VICTORY_HOST_TEXTURE_CAP_MB`: a hard budget on the bytes of host copies
+    // alive. Over it, a copy is let go as soon as nothing holds it, however
+    // recently it was used — the story asks for about 10 GB of textures in
+    // three minutes and there is no other lever (docs/world-death.md).
+    let cap_mb = std::env::var_os("VICTORY_HOST_TEXTURE_CAP_MB")
+        .and_then(|v| v.to_string_lossy().trim().parse::<u64>().ok());
     // For the trail (`crate::host::trail`): how many went, their bytes,
     // and the first one.
     let (mut went, mut bytes, mut first) = (0u64, 0u64, None);
@@ -1651,10 +1657,15 @@ pub(crate) fn let_go_idle() {
         }
         let gone = {
             let mut made = r.host.made.lock().unwrap_or_else(|e| e.into_inner());
+            let over = cap_mb.is_some_and(|mb| {
+                HOST_TEXTURES[1].load(Relaxed) > mb.saturating_mul(1024 * 1024)
+            });
             let idle = made.as_ref().is_some_and(|(host, _)| {
-                crate::host::long_ago(r.host.used.load(Relaxed), idle_ms, IDLE_FRAMES)
-                    && std::sync::Arc::strong_count(host) == 1
-                    && crate::host::references(&host.texture) == 1
+                let eligible = std::sync::Arc::strong_count(host) == 1
+                    && crate::host::references(&host.texture) == 1;
+                eligible
+                    && (over
+                        || crate::host::long_ago(r.host.used.load(Relaxed), idle_ms, IDLE_FRAMES))
             });
             if idle {
                 // Under the lock: the next use must not find the staging
