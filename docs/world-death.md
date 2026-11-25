@@ -603,3 +603,22 @@ the title's.
 What is left for a playable frame is now a short list, in the frame line's own order: 70 MB of
 title copies a frame, the copy-back, the GPU's own 71–72 ms, and the draws (2,132–2,919 in the
 loading phases). The texture read that used to be 7 s of every frame is gone.
+
+## The copies are load-bearing: without them the card's story is black
+
+`VICTORY_COPY_MODE=none` on the card, story, with both performance switches on:
+
+```
+story packs 7, world packs 8, 1.5–5.1 fps
+frame: copies 12.4–15.3 ms 34–44 MB, copy-back 0.1–0.2 MB (was 33 MB), GPU 8.5–68.4 ms, 726–1228 draws
+every capture: 6,121 bytes — a black frame
+```
+
+So the 70 MB of copies and the 33 MB of copy-back are what put the title's memory on the card at
+all; switching them off buys about 100 ms a frame and renders nothing. The saving has to be
+**selective** — copy what the frame's draws read, not the caches' whole working set — which is the
+same read-set work the texture refresh still needs.
+
+What is left after that, from this run's own numbers: preparing 152–218 ms of which textures are
+109–181 ms (the stride does not cover the textures that change every frame), the GPU's 8–68 ms,
+and 726–1,228 draws.
