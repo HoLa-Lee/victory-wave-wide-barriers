@@ -384,6 +384,24 @@ fn feature_levels(data: *mut c_void) -> HRESULT {
     }
 }
 
+/// Slot 0x128: `ID3D12Device::GetDeviceRemovedReason`, "the reason that the
+/// device was removed, or `S_OK` if the device isn't removed" (D3D12
+/// reference). Left at the default handler it answered `E_NOTIMPL`
+/// (`0x80004001`) on a healthy device, which a title testing
+/// `FAILED(GetDeviceRemovedReason())` reads as a lost device; taken from
+/// upstream `13185f5` (#928). The console's device is removed when the
+/// host's is, so the answer is the host device's own state.
+extern "system" fn removed_reason(_: This) -> HRESULT {
+    #[cfg(windows)]
+    if let Some(host) = crate::host::host() {
+        // SAFETY: a plain query.
+        if let Err(e) = unsafe { host.device.GetDeviceRemovedReason() } {
+            return e.code().0;
+        }
+    }
+    S_OK
+}
+
 /// Device methods 0x1c8 and 0x218 (`SLOT`). The title calls both
 /// (title+0x2477578 and title+0x24800d5) as `(this, description, interface
 /// id, out)`, asks for `ID3D12PipelineState`, and on success keeps the
@@ -469,6 +487,7 @@ static FUNCTIONS: Table<160> = {
     f[28] = resource::create_heap as *const (); // 0xe0
     f[29] = resource::create_placed as *const (); // 0xe8
     f[36] = fence::create as *const (); // 0x120
+    f[37] = removed_reason as *const (); // 0x128
     f[38] = resource::copyable_footprints as *const (); // 0x130
     f[39] = query::create as *const (); // 0x138
     f[41] = signature::create as *const (); // 0x148
@@ -601,6 +620,13 @@ mod tests {
         let heap = Box::new(0u8);
         assert!((config.lowest..=config.highest).contains(&(&raw const *heap as u64)));
         assert_eq!(configure_virtual_memory(std::ptr::null_mut()), E_INVALIDARG);
+    }
+
+    #[test]
+    fn a_healthy_device_reports_no_removal() {
+        type Reason = extern "system" fn(This) -> HRESULT;
+        let device = device();
+        assert_eq!(slot::<Reason>(device, 0x128)(device), S_OK);
     }
 
     #[test]
