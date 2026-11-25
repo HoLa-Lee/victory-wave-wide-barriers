@@ -835,3 +835,25 @@ that stands between this branch and a playable world.
 
 Everything else held for the whole eight minutes: no removal, no trap, `VICTORY_FAST=1` keeping
 the frame at 0.6–1.8 fps (1,417 and 561 ms in the last two lines, textures 9–252 ms).
+
+## The merged tree runs on the card (fxceless' first-room fixes + this branch's performance work)
+
+After merging the other session's three commits (and the fork's newest `8dd30ab`, `a26859f`,
+`9376fd6`) the tree builds and runs:
+
+```
+story packs 7, world packs 8, no removal, no trap
+1.6 fps, 614.0 ms (preparing 553.0: copies 36.7 ms 121.1 MB, textures 486.9 ms 1.1 MB;
+  GPU 12.1 ms; copy-back 101.8 ms 54.1 MB), …
+3.7 fps, 269.2 ms (preparing 185.1: copies 44.0 ms 125.4 MB, textures 114.1 ms 1.0 MB;
+  GPU 60.0 ms; copy-back 111.0 ms 61.2 MB), …
+```
+
+**Textures are down to 1.0–1.1 MB a frame** (from 372 MB at the start of this work) and the frame is
+now copies (36–44 ms), the GPU (12–60 ms) and the copy-back (102–111 ms). The copy-back is the
+largest single item left, and it is the next thing to measure rather than guess at.
+
+The conflict that had to be resolved (both sessions had edited `victory-gpu/src/texture.rs`) also
+cost the per-run predicate in `victory-formats::detile_where`: `walk` copies runs itself now, so
+only the subresource-level skip survives. That is worth knowing before anyone measures
+`VICTORY_DETILE_WRITTEN` again.
