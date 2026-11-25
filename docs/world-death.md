@@ -665,3 +665,27 @@ For the next attempt, the hook is one call away from `table_entry`'s `handle`: d
 descriptor there (the layer already does, to decide `is_texture_view` and to `mirror`) and note its
 texture address. The machinery around it — set, gate, counters, and the 9.8 fps ceiling — is in
 place and off by default.
+
+## With the read set finally correct, it turns out the draws read most of them
+
+Third attempt, the set keyed both by the view's address and by the staging's memory pointer — so
+`note_read` now lands and refreshes happen for the textures the frame reads:
+
+```
+0.3 fps, 3657.6 ms (2021.7 preparing: copies 45.7 ms 147.7 MB, textures 1881.7 ms 300.7 MB;
+  GPU 168.1 ms; copy-back 266.9 ms 71.8 MB), 4768 draws
+0.4 fps, 2731.4 ms (2191.0 preparing: copies 57.2 ms 171.4 MB, textures 2051.8 ms 176.3 MB;
+  GPU 162.1 ms; copy-back 304.0 ms 76.6 MB), 3392 draws
+```
+
+**Textures 1.9–2.1 s a frame even when only the read ones are refreshed.** So the read set is not
+the lever this document hoped for: the frame's draws genuinely read most of the twenty-odd
+thousand textures, and "do not refresh what is not read" saves a fraction. The stride
+(`VICTORY_TEXTURE_REFRESH_EVERY`) is what made the story run at 6.5 fps, and its price is
+staleness, not correctness.
+
+That redirects the next change to the refresh's own cost: a texture is detiled **whole** when any
+page of it was written (the module's own note: "a change detiles the whole texture, not the pages
+written"), and the story writes a page here and a page there continuously. Detiling only the pages
+the write watch names — the machinery for asking is already there — is the change that should
+turn 300 MB a frame into kilobytes, without the stride's staleness.

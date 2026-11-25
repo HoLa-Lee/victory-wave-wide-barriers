@@ -1,4 +1,4 @@
-//! Texture contents the title writes itself (decision 0007, "Texture
+﻿//! Texture contents the title writes itself (decision 0007, "Texture
 //! memory"): streamed pages, layout-library copies, movie frames, glyph
 //! atlases. Such a texture lives in console memory in its tiled layout;
 //! before a submission samples its host copy, the memory is detiled into a
@@ -67,7 +67,7 @@ struct Last {
     /// `VICTORY_TEXTURE_SAMPLE_SKIP`: a cheap fingerprint of four spots in the
     /// texture's title memory, for memory with no write-watch (the title's
     /// page pool is a file mapping, where `GetWriteWatch` answers nothing and
-    /// every refresh therefore reads it whole — 24,821 refreshes and 24.8 GB
+    /// every refresh therefore reads it whole 鈥?24,821 refreshes and 24.8 GB
     /// a frame at 0.1 fps on the card, see docs/world-death.md).
     sample: u64,
     sampled: bool,
@@ -99,13 +99,18 @@ pub(crate) fn note_read(at: usize) {
     if !read_set() {
         return;
     }
-    let Some(key) = staging_key(at) else { return };
+    // Keyed by the address the view carries, and by the staging's memory
+    // pointer when the two are the same memory: whichever matches.
     let mut set = READ_TEXTS.lock().unwrap_or_else(|e| e.into_inner());
-    set.get_or_insert_with(Default::default).insert(key);
+    let set = set.get_or_insert_with(Default::default);
+    set.insert(at);
+    if let Some(key) = staging_key(at) {
+        set.insert(key);
+    }
 }
 
 /// Whether the submission's draws read the texture whose staging key is
-/// `key` — or whether the read set is not in use, in which case: yes.
+/// `key` 鈥?or whether the read set is not in use, in which case: yes.
 pub(crate) fn was_read(key: usize) -> bool {
     if !read_set() {
         return true;
@@ -583,7 +588,7 @@ pub(crate) fn placed_in_host_written(address: u64, desc: &[u32; 14]) {
 /// memory.
 /// How often a staging's refresh was asked for, how often it actually read
 /// title memory, and how often a submission skipped it because it had
-/// already asked (`Batch::texture_due`) 閳?for `VICTORY_PRESENT_TRACE`, which
+/// already asked (`Batch::texture_due`) 闁?for `VICTORY_PRESENT_TRACE`, which
 /// prints the three counts beside every present.
 static REFRESH_ASKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static REFRESH_READ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
