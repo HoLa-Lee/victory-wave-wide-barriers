@@ -689,3 +689,24 @@ page of it was written (the module's own note: "a change detiles the whole textu
 written"), and the story writes a page here and a page there continuously. Detiling only the pages
 the write watch names — the machinery for asking is already there — is the change that should
 turn 300 MB a frame into kilobytes, without the stride's staleness.
+
+## What per-page detiling would win, measured before doing it
+
+The refresh now counts the bytes the write watch names against the bytes a whole detile moves:
+
+```
+written bytes against detiled bytes named=12025779  whole=90869504  ratio=0.132
+written bytes against detiled bytes named=17867793  whole=100151040 ratio=0.178
+written bytes against detiled bytes named=24036172  whole=105238272 ratio=0.228
+```
+
+**A fifth to a seventh of what is detiled is ever written.** So detiling only the named pages is a
+4–8× saving on the texture path — from the 1.9–2.1 s a frame measured with the read set on to
+roughly 250–500 ms — and, unlike the stride, it costs no staleness: what is not written is
+already correct on the card.
+
+The change is in `Staging::refresh_timed`: the `written` ranges are already in hand (they are what
+the count above sums), and the detile would be applied per block of the tiled layout instead of to
+the whole read. The layout code knows the block size; the pieces are the mapping from a written
+byte range to the blocks that cover it, and a detile that takes a range. Until that exists, the
+stride remains the way to run the story at 6.5 fps.

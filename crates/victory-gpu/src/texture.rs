@@ -804,6 +804,26 @@ impl Staging {
                 return 0;
             }
             last.asked = now;
+            {
+                // How much of the texture the write watch names, against the
+                // bytes a whole detile moves: the ratio per-page detiling
+                // would win (docs/world-death.md).
+                static WRITTEN_BYTES: std::sync::atomic::AtomicU64 =
+                    std::sync::atomic::AtomicU64::new(0);
+                static WHOLE_BYTES: std::sync::atomic::AtomicU64 =
+                    std::sync::atomic::AtomicU64::new(0);
+                let named: u64 = written.iter().map(|&(_, w)| w).sum();
+                let w = WRITTEN_BYTES.fetch_add(named, std::sync::atomic::Ordering::Relaxed) + named;
+                let a = WHOLE_BYTES.fetch_add(size as u64, std::sync::atomic::Ordering::Relaxed) + size as u64;
+                if w > 0 && a > 0 && crate::frame::current().is_multiple_of(16) {
+                    tracing::info!(
+                        named = w,
+                        whole = a,
+                        ratio = (w as f64) / (a as f64),
+                        "written bytes against detiled bytes"
+                    );
+                }
+            }
             // Read through the copy, which stands unmapped pages: memory of
             // big pools is too slow to ask page by page.
             with_read(size, |read| {
