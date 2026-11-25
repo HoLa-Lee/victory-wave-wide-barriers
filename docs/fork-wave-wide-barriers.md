@@ -316,6 +316,67 @@ software adapter (`VICTORY_VIEW_HEAP_CAP=1000000`) WARP keeps running at
 22 fps for the whole run. So this is a defect for the world, whose heaps are
 past 737,855, and not the `0x887A0004`.
 
+### The capability table, asked directly
+
+`crates/victory-gpu/examples/d3d12_probe.rs` asks one adapter the questions this
+layer asks and prints one line per answer, so two runs `diff`:
+
+```
+cargo run -p victory-gpu --example d3d12_probe                      # the card
+VICTORY_PROBE_WARP=1 cargo run -p victory-gpu --example d3d12_probe # WARP
+```
+
+| question | RTX 4080 SUPER | WARP |
+|---|---|---|
+| `D3D12_OPTIONS1` wave lanes (min / max) | 32 / 32 | 4 / 4 |
+| `D3D12_OPTIONS5` | `[1, 0, 12]` | `[1, 0, 11]` |
+| `D3D12_OPTIONS7` (mesh tier, …) | `[10, 90]` | `[10, 100]` |
+| `SHADER_MODEL` | `0x68` (6.8) | `0x68` (6.8) |
+| `ARCHITECTURE1` (UMA bits last) | `[0, 0, 0, 0, 1]` | `[0, 0, 1, 1, 0]` |
+| GPU virtual address bits | `[40, 40]` | `[32, 47]` |
+| view heap, 1,000,000 slots | ok | ok |
+| view heap, 1,000,001 slots | refused `0x80070057` | ok |
+| view heap, 1,245,184 / 1,507,328 | refused | ok |
+| `B4G4R4A4_UNORM` (115): plain / RT / UAV | ok / **refused** / **refused** | ok / ok / ok |
+| `R32G8X24_TYPELESS` (19): RT / UAV | refused / refused | refused / refused |
+| `BC7_UNORM` (98): RT / UAV | refused / refused | refused / refused |
+| `R8G8B8A8_UNORM`, `D32_FLOAT`: RT / UAV | ok | ok |
+
+`D3D12_FEATURE_FORMAT_SUPPORT` says the same in bits. For format 115 the card
+answers `TEXTURE1D/2D/3D/CUBE, SHADER_LOAD, SHADER_SAMPLE, MIP,
+MULTISAMPLE_RESOLVE, SHADER_GATHER` — **no `RENDER_TARGET`, no
+`TYPED_UNORDERED_ACCESS_VIEW`**; WARP answers the same plus `RENDER_TARGET,
+BLENDABLE, MULTISAMPLE_RENDERTARGET, MULTISAMPLE_LOAD, TYPED_UNORDERED_ACCESS_VIEW,
+BUFFER, IA_VERTEX_BUFFER`. So WARP grants a use this format does not have on PC,
+and the card is the adapter that follows the answer. That is exactly the line
+`70564ae` printed half a second before it lost the device:
+`no host texture … 2560x1440 format: 115 … flags: 1` (flags 1 is the render
+target).
+
+Both differences are the subject of #101: the wave lanes decide how wave64 code
+is translated, and a console texture that is a render target in a format PC
+cannot render to is a resource the card will not make at all.
+
+### The layer names that capability now, and must not "fix" it by dropping the flag
+
+`resource::host_texture` asks `D3D12_FEATURE_FORMAT_SUPPORT` before it creates
+(once per format; the answer does not change in a run) and names the use the
+host has none for:
+
+```
+WARN victory_gpu::resource: the host says this format has no such use: its creation
+is refused and the draw has no texture  format=115 lost=5
+```
+
+It does **not** drop the flag from the description, and that is a measurement:
+with `ALLOW_RENDER_TARGET` dropped the texture is made, the draw's render-target
+view is still made on it, and **WARP loses its device 0.3 s into the first
+frame** (`DXGI_ERROR_DEVICE_REMOVED 0x887A0005`, "the GPU device instance has
+been suspended") on a tree whose WARP runs are otherwise clean for 25-45 s. A
+flag can only be dropped together with the views that need it — the RTV/UAV
+creation refusing by name, or a supported format's twin — and that is the next
+change, not this one.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the

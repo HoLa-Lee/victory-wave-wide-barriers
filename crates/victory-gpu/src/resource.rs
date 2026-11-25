@@ -1614,8 +1614,122 @@ pub(crate) fn host_copy(this: This) -> Option<std::sync::Arc<HostTexture>> {
     hosted(this, true).map(|made| made.0)
 }
 
+/// The flags a host texture's description carries: the console's own low
+/// bits of `ResourceDesc::flags`, which `host_texture` passes on as the
+/// host's `D3D12_RESOURCE_FLAGS`.
+const FLAG_TARGET: u32 = 1;
+const FLAG_DEPTH: u32 = 2;
+const FLAG_UNORDERED: u32 = 4;
+
+/// What `D3D12_FEATURE_FORMAT_SUPPORT` answers for `format` (its
+/// `D3D12_FORMAT_SUPPORT1` bits), for the host device this run made. Asked
+/// once per format: a texture is made on every load, and the answer does not
+/// change in a run.
+#[cfg(windows)]
+fn host_format_support(host: &crate::host::Host, format: u32) -> Option<u32> {
+    use windows::Win32::Graphics::Direct3D12::*;
+    static ASKED: std::sync::Mutex<[Option<Option<u32>>; 256]> =
+        std::sync::Mutex::new([const { None }; 256]);
+    let mut asked = ASKED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(answer) = asked[(format as usize) & 0xff] {
+        return answer;
+    }
+    let mut query = D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+        Format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT(format as i32),
+        Support1: D3D12_FORMAT_SUPPORT1(0),
+        ..Default::default()
+    };
+    // SAFETY: the query writes the structure it is handed.
+    let answer = unsafe {
+        host.device.CheckFeatureSupport(
+            D3D12_FEATURE_FORMAT_SUPPORT,
+            (&raw mut query).cast(),
+            size_of_val(&query) as u32,
+        )
+    }
+    .ok()
+    .map(|()| query.Support1.0 as u32);
+    asked[(format as usize) & 0xff] = Some(answer);
+    answer
+}
+
+/// The description's flags minus the ones `support` says the format does not
+/// have, and which were dropped: `(kept, lost)`.
+fn kept_flags(flags: u32, support: u32) -> (u32, u32) {
+    use windows::Win32::Graphics::Direct3D12::*;
+    let (mut kept, mut lost) = (flags, 0);
+    if flags & FLAG_TARGET != 0 && support & D3D12_FORMAT_SUPPORT1_RENDER_TARGET.0 as u32 == 0 {
+        kept &= !FLAG_TARGET;
+        lost |= FLAG_TARGET;
+    }
+    if flags & FLAG_UNORDERED != 0
+        && support & D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW.0 as u32 == 0
+    {
+        kept &= !FLAG_UNORDERED;
+        lost |= FLAG_UNORDERED;
+    }
+    (kept, lost)
+}
+
+/// Says once per format and flag that this host has no such use for it: a
+/// run should show which capability a texture loses, and not once per draw.
+fn lost_capability(format: u32, lost: u32) {
+    static SAID: std::sync::Mutex<Vec<(u32, u32)>> = std::sync::Mutex::new(Vec::new());
+    if lost == 0 {
+        return;
+    }
+    let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
+    if said.contains(&(format, lost)) {
+        return;
+    }
+    said.push((format, lost));
+    tracing::warn!(
+        format,
+        lost,
+        "the host says this format has no such use: its creation is refused and the draw has no texture"
+    );
+}
+
+#[cfg(all(test, windows))]
+mod format_flag_tests {
+    use super::*;
+
+    #[test]
+    fn a_flag_the_format_has_not_is_left_off() {
+        use windows::Win32::Graphics::Direct3D12::*;
+        let rt = D3D12_FORMAT_SUPPORT1_RENDER_TARGET.0 as u32;
+        let uav = D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW.0 as u32;
+        // Supported: the description is untouched.
+        assert_eq!(kept_flags(FLAG_TARGET, rt), (FLAG_TARGET, 0));
+        assert_eq!(kept_flags(FLAG_UNORDERED, uav), (FLAG_UNORDERED, 0));
+        // The card's B4G4R4A4_UNORM: no render target, no unordered access.
+        assert_eq!(
+            kept_flags(FLAG_TARGET | FLAG_UNORDERED, 0),
+            (0, FLAG_TARGET | FLAG_UNORDERED)
+        );
+        // Half of it: the render target stays, the unordered access goes.
+        assert_eq!(
+            kept_flags(FLAG_TARGET | FLAG_UNORDERED, rt),
+            (FLAG_TARGET, FLAG_UNORDERED)
+        );
+        // Nothing asked for, nothing lost.
+        assert_eq!(kept_flags(0, uav), (0, 0));
+        // A depth target is not dropped here: a texture without one is not
+        // the texture the title made, and the creation failure says so.
+        assert_eq!(kept_flags(FLAG_DEPTH, 0), (FLAG_DEPTH, 0));
+    }
+}
+
 /// A host texture like the title's: same description, in GPU memory,
 /// without the console's layout and flags.
+///
+/// The host is asked about the format first (`D3D12_FEATURE_FORMAT_SUPPORT`)
+/// and a flag it says the format has not is left off: this is where
+/// `2560x1440` `B4G4R4A4_UNORM` with a render target came back
+/// `0x80070057` and the draw ran with no texture at all (run 96, the card;
+/// WARP makes that one, so only a card shows it). A texture without its
+/// render target samples and copies as before; the views that need the flag
+/// are the ones refused, by name, further along.
 #[cfg(windows)]
 fn host_texture(
     desc: &ResourceDesc,
@@ -1636,8 +1750,8 @@ fn host_texture(
     // allows both; the title's shadow maps ask for it).
     // The host copy loses the unordered access: shaders write a colour
     // twin instead ([`Twin`]).
-    const DEPTH: u32 = 2;
-    const UNORDERED: u32 = 4;
+    const DEPTH: u32 = FLAG_DEPTH;
+    const UNORDERED: u32 = FLAG_UNORDERED;
     if d.flags & DEPTH != 0 {
         if d.flags & UNORDERED != 0 {
             DEPTH_UNORDERED[0].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1645,7 +1759,7 @@ fn host_texture(
         d.flags &= !UNORDERED;
     }
     d.format = pc_format(d.format);
-    const TARGET: u32 = 1;
+    const TARGET: u32 = FLAG_TARGET;
     if d.flags & (TARGET | UNORDERED) != 0 {
         d.format = target_format(d.format);
     }
@@ -1659,6 +1773,22 @@ fn host_texture(
     // their unordered access views plain UNORM.
     if d.flags & UNORDERED != 0 && SRGB.iter().any(|&(srgb, _)| srgb == d.format) {
         d.format = family(d.format);
+    }
+    // What this host says the format can be, before asking for it: a use it
+    // reports it has not is a creation the host refuses (`0x80070057`), and
+    // then the draw has no texture at all (run 96, `2560x1440`
+    // `B4G4R4A4_UNORM` with a render target, the card; WARP makes that one,
+    // so only a card shows it).
+    //
+    // The flag is *not* dropped here: a render-target view on a texture
+    // made without `ALLOW_RENDER_TARGET` removes WARP's device at the first
+    // draw that writes it (measured 2026-11-25 00:05: clean 25-45 s runs,
+    // then `0x887A0005` 0.3 s in). Dropping the flag is only safe together
+    // with refusing the views that need it, which is the next step, so this
+    // names the capability and leaves the description alone.
+    if let Some(support) = host_format_support(host, d.format) {
+        let (_, lost) = kept_flags(d.flags, support);
+        lost_capability(d.format, lost);
     }
     // The clear value names the format too: format, then color or depth
     // and stencil (5 words).
