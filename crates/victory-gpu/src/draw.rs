@@ -2416,6 +2416,12 @@ impl State {
             return;
         };
         if let Some(view) = host.mirror(index, handle, true) {
+            // `VICTORY_REFRESH_READ_SET`: the texture behind this entry is
+            // one this draw reads, so its refresh is due (see
+            // `crate::texture`). Direct table reads never reach `readable`.
+            if let Some(at) = crate::descriptor::host::placed_texture_address(&view) {
+                crate::texture::note_read(at);
+            }
             readable(list, u.kind, &view);
             // Up to date by this draw: not the texture pass's to make.
             if crate::descriptor::host::is_texture_view(&view) {

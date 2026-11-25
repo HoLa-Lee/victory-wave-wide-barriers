@@ -2283,13 +2283,14 @@ fn same_placed_texture(a: &View, b: &View) -> bool {
 /// (`VICTORY_REFRESH_READ_SET`, see `crate::texture`).
 pub(crate) fn placed_texture_address(view: &View) -> Option<usize> {
     const BUFFER: u32 = 1;
-    let View::Placed(false, resource, desc) = view else {
+    let View::Placed(_, resource, desc) = view else {
         return None;
     };
     if resource[0] == BUFFER {
         return None;
     }
-    Some((u64::from(desc[10]) | u64::from(desc[11]) << 32) as usize)
+    let address = u64::from(desc[10]) | u64::from(desc[11]) << 32;
+    (address != 0).then_some(address as usize)
 }
 
 pub(crate) fn placed_texture(view: &View) -> Option<View> {

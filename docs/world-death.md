@@ -643,3 +643,25 @@ views of the *bind* path, while the story's draws read their textures through **
 The fix is one hook, in the table-entry path in `draw.rs` (the place that already computes
 `title + k` and calls `mirror`): mark the texture behind that entry as read. The rest of the
 machinery — the set, the `Step::Texture` gate, the counters — is in place and off by default.
+
+## The read set, second attempt: a green frame, and the ceiling it shows
+
+With the hook moved to the table-entry path (`table_entry`, where `handle` is the title descriptor)
+and the address helper relaxed to accept either `View::Placed` flag:
+
+```
+9.4–9.8 fps, 102–107 ms a frame (preparing 61.8–69.0: copies 72.6–83.5 MB, textures 0.0 ms;
+  GPU 23.2–24.7 ms; copy-back 25.8–40.1 MB), 904–990 draws
+capture: solid green
+```
+
+**9.8 fps** is the ceiling this optimisation is chasing — with textures at 0.0 ms the frame is
+finally copies (35 ms), the GPU (23–25 ms) and the copy-back (59–73 ms). But the picture is a
+solid green frame, so `note_read` is still not being told about the textures the draws read: the
+mirrored view that `host.mirror` returns is not a `View::Placed` carrying the title address, and
+the table entry's own descriptor (at `handle`) is where the address must be decoded from.
+
+For the next attempt, the hook is one call away from `table_entry`'s `handle`: decode the title
+descriptor there (the layer already does, to decide `is_texture_view` and to `mirror`) and note its
+texture address. The machinery around it — set, gate, counters, and the 9.8 fps ceiling — is in
+place and off by default.
