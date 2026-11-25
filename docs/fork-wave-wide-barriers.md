@@ -1069,3 +1069,30 @@ presence of `Z:\settings\settings.xml`, not the two other directories, not their
 not anything inside the file. The title will still write a real one when the flow walks it
 (see the section above), and a launcher can therefore pick either: walk the flow once, or drop
 any file of that name.
+
+### 2026-11-25 10:55: the forty-second route into the world, and what the world costs
+
+Everything the last two rounds established, as a recipe anyone can run:
+
+```powershell
+# 1. a data folder whose first run is already "set up": any file of that name will do
+$dir = "$env:TEMP\vworld"; Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path "$dir\7952987A\storage\settings" | Out-Null
+New-Item -ItemType File -Path "$dir\7952987A\storage\settings\settings.xml" | Out-Null
+
+# 2. the pad's A is Enter: the setup pages never come, the menus need one press each
+$env:VICTORY_DATA_DIR = $dir
+$env:VICTORY_KEYS = "15:Enter,20:Enter,25:Enter,30:Enter"
+$env:VICTORY_LOG = "info"
+& .\target\diag\victory.exe run "<dump>\game_scarlett_master.exe" --execute
+```
+
+Measured on it (WARP): the first world packs (`core_restofworld`) open at **16 s**, and the
+story's own packs (`pack\story000\story000.rpf`, `story000_script.rpf`) follow once the menus
+are pressed through. The world then runs at **1.6 fps, about 620–630 ms a frame**, with frames
+that read black in between (`levels … 0, 0, 0 …` warnings) and no device removal in any run
+this build has done in that phase.
+
+That rate is the honest current cost of the world on the software adapter: the 4.4–5.9 fps this
+report measured earlier was a 39-draw loading-phase scene, not the story. Sixty times slower
+than the 30 fps the menus hold, and the reason the world is the thing to work on next.
