@@ -1561,3 +1561,33 @@ That leaves the other capture as the stronger one: the indirect record with five
 which is what the other session's `f0b20fc` now refuses to issue. If the death survives that
 switch, the upload note is back in play — as a list that ran before the title filled something,
 not as a malformed box.
+
+### 2026-11-25 12:35: skipping the empty indirect records keeps the card alive — and the title crashes instead
+
+The arm the other session asked for: the same choreography, `VICTORY_SKIP_EMPTY_INDIRECT=1`,
+660 s of run time allowed, WARP, DRED on.
+
+```
+story=7   device removals=0
+```
+
+**No device removal**, where every arm with the switch off died at 80–320 s (four times in this
+report alone). So the empty indirect record is the call the card dies on, or is tied to it: this
+is the second arm without a removal (the other session's was the first).
+
+What happens instead, 251 s in:
+
+```
+VIctory: unhandled exception 0xc0000005 at victory-image-b99f876b74d4a77f.dll+0x23cf683
+  (write 0x0: nothing mapped there)  rax 0x0 rbx 0x0 …
+  #0 …+0x23cf683  #1 …+0x2215c35  #2 …+0x2215eca  #3 KERNEL32  #4 ntdll
+```
+
+a **null write inside the title's own image** — not a device fault. So the records are not
+spurious to the title: skipping them changes what the world does and a title-side null deref
+surfaces at 4 minutes.
+
+That points the fix away from "do not issue it" and towards "**make sure its arguments are
+written before the list runs**" — the same conclusion the GBV capture pointed at from the other
+side (a list running against title memory the title had not filled yet). Both arms agree that
+the record's contents at issue time are the problem, not the record itself.
