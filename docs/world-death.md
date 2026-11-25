@@ -857,3 +857,24 @@ The conflict that had to be resolved (both sessions had edited `victory-gpu/src/
 cost the per-run predicate in `victory-formats::detile_where`: `walk` copies runs itself now, so
 only the subresource-level skip survives. That is worth knowing before anyone measures
 `VICTORY_DETILE_WRITTEN` again.
+
+## The copies have nothing to join, and the copy-back costs about 2 ms a megabyte
+
+`VICTORY_JOIN_COPIES=1` (join each buffer copy that continues the one before) on the card, merged
+tree, `VICTORY_FAST=1`:
+
+```
+1.2 fps, 822.1 ms (preparing 156.4: copies 107.7 ms 191.0 MB, textures 31.9 ms 34.7 MB;
+  GPU 96.3 ms; copy-back 196.0 ms 71.6 MB), …
+0.6 fps, 1561.2 ms (preparing 761.9: copies 89.5 ms 155.9 MB, textures 640.5 ms 19.8 MB;
+  GPU 102.6 ms; copy-back 141.2 ms 49.4 MB)
+title buffer copies recorded per frame: 72, of them 0 continue the one before
+title buffer copies recorded per frame: 66, of them 0 continue the one before
+```
+
+**"0 continue the one before"** in both lines: in this phase there is nothing for the switch to
+join, so it neither helps nor hurts. The copy-back line is the informative one — 49–72 MB costing
+141–196 ms is **2–3 ms a megabyte**, which is not bandwidth (the relay's own line says the thread
+waited 40–45 ms "for fetch"), so the cost is latency per fetch, not size. That is the thing to
+measure next: how many fetches a frame makes and how long each waits, before any change to the
+copy-back itself.
