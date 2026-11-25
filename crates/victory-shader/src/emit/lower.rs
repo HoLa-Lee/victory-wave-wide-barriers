@@ -5710,6 +5710,35 @@ impl<'a> Lower<'a> {
                 address,
                 self.x.res.lane_copied.contains(&site)
             );
+            // And which of the eight dwords the program then reads, in what:
+            // a descriptor read as data can only be reproduced once it is known
+            // whether an address, a format or a size is taken out of it. Six
+            // consumers are enough to tell the three apart.
+            {
+                let (block, index) = (site.0, site.1);
+                let block = &self.x.p.blocks[block].insts;
+                let mut said = 0;
+                for next in block.iter().skip(index + 1) {
+                    let used: Vec<u8> = next
+                        .reads
+                        .iter()
+                        .filter_map(|(reg, _)| match *reg {
+                            Reg::S(s) if s >= code && s < code.saturating_add(count as u8) => {
+                                Some(s - code)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    if used.is_empty() {
+                        continue;
+                    }
+                    eprintln!("DESC-USE {} dwords {used:?}", next.name());
+                    said += 1;
+                    if said == 6 {
+                        break;
+                    }
+                }
+            }
             return Err("a descriptor read only as data");
         };
         let src = Source::Loaded { load: site, first };
