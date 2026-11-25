@@ -482,6 +482,12 @@ pub(crate) static ALIVE: [std::sync::atomic::AtomicU64; 8] = [const { std::sync:
 /// makes at its start).
 pub(crate) static LISTS: [std::sync::atomic::AtomicU64; 4] = [const { std::sync::atomic::AtomicU64::new(0) }; 4];
 
+/// Buffer refreshes a submission asked for and how many were carried out, for
+/// `VICTORY_PRESENT_TRACE`: a pair that does not move between two presents
+/// means the frame's draws read the state from before.
+pub(crate) static BUF_REFRESH: [std::sync::atomic::AtomicU64; 2] =
+    [const { std::sync::atomic::AtomicU64::new(0) }; 2];
+
 /// The process's private bytes (diagnostics: around the making of lists).
 #[cfg(feature = "diagnostics")]
 fn private_bytes() -> u64 {
@@ -5018,6 +5024,7 @@ impl HostList {
         address: usize,
         len: usize,
     ) {
+        BUF_REFRESH[0].fetch_add(1, Ordering::Relaxed);
         let mut deferred = self.deferred();
         let key = (std::sync::Arc::as_ptr(shadow) as usize, address, len);
         if deferred.refreshed.insert(key) {
@@ -5353,6 +5360,7 @@ impl Batch {
 
     /// Brings `[from, to)` of a copy up to date, timed.
     fn update(shadow: &crate::shadow::Shadow, from: usize, to: usize) {
+        BUF_REFRESH[1].fetch_add(1, Ordering::Relaxed);
         let started = std::time::Instant::now();
         let copied = shadow.update(from, to - from);
         let us = started.elapsed().as_micros() as u64;
@@ -6128,6 +6136,7 @@ impl Host {
                     source = %format_args!("{:p}", texture.as_raw()),
                     title_at = %format_args!("{:#x}", at),
                     refresh = %format_args!("{:?}", crate::texture::refresh_counts()),
+                    buffer_refresh = %format_args!("({}, {})", BUF_REFRESH[0].load(Ordering::Relaxed), BUF_REFRESH[1].load(Ordering::Relaxed)),
                     "present"
                 );
             }
