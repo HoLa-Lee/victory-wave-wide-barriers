@@ -603,3 +603,84 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 | #2478 | `c8d6571` | **merge-candidate**，等维护者批 CI |
 | #2790 | `69d483f` | 单文件 +199/−3，`IndependentBlendEnable` 已修，等复看 |
 | #1098（fxceless） | `bfbb167` | 按评审收紧，等复看 |
+
+---
+
+## 21. 本轮（2026-11-26 07:30）：5 → 3 → 2 → 1 四项做完 + 8 小时监控上线
+
+### 21.1 ⑤ paired-wave64 在卡上的实测：**compute 拒绝 7 → 0**
+
+方法：300 s 开场，同键序同种子，`VICTORY_TEXTURE_REFRESH_EVERY=8` / `STAGE_MB=64` / `GATHER=1`，调试层关。A 臂 = 我们 main + #2790；B 臂 = `fxceless/victory-fork` PR **#854**（head `51700c6`）+ 我们自己两笔（stride、以及删掉它引用的两个诊断计数）。
+
+| | A（main + #2790） | B（#854 paired） |
+|---|---|---|
+| compute 管线被拒 | **7**（`02384a60`/`2cc4c197`/`2da4beb3`/`369cbe90`/`5dc3b259`/`6b82bc7d`/`6f225b64`） | **0** |
+| 完全不翻译的 compute shader | **2**（`926c46ba`、`f133e35e`） | **0** |
+| 其它被拒 | 0 | 1（`mesh f5e50eb2108c425b + pixel ce3f0432a08f1d35`，即 #2790 的 R8_UINT 混合，本臂没带 #2790） |
+| 丢设备 / 陷阱 | 0 / 0 | 0 / 0 |
+| 故事帧数 | 23 | 18 |
+| 最高 draws | 9,393 | 9,967 |
+
+**成本**：同样的 draws 下慢 1.5–3.3×（6,116 draws 1,840 ms vs 7,016 draws 1,200 ms；9,967 draws 3,749 ms vs 9,393 draws 1,119 ms），纹理项从 0.3–8 MB/帧涨到 8–275 MB/帧 —— 因为**这些 compute 现在真的在跑**，而它们会写纹理。
+→ 已发 #1633（`7177127504`）。**结论：#854 是卡上唯一能让那 7 个管线跑起来的路径；配上 #2790 则"零拒绝管线"的卡上配置成立。**
+
+### 21.2 ③ copy-back 的四分桶：**95% 是在等卡，不是字节工作**
+
+插桩 `Shadow::relay_merge`（本机走 `VICTORY_LATE_WAIT=1` + `VICTORY_RELAY=2`），300 s：
+
+| 每帧 | 数值 |
+|---|---|
+| 帧行的 "copying back"（= relay 线程 landing 总时间） | **60–127 ms** |
+| 其中**等卡（无事可 landing）** | **29–46 ms** |
+| 其中**等卡上 fetch 的 piece** | **33–82 ms** |
+| 合并的 piece / 写回字节 | 132–171 pieces，**2.2–2.7 MB** |
+| 快照锁等待 | **0.00 ms** |
+| 锁内做完（拷贝、diff、读 title、merge） | **2.4–2.9 ms** |
+| 真正写进 title memory | **0.38–0.52 ms** |
+
+→ **主机侧字节工作只有 ~3 ms/帧**；`GPU-SNAPSHOT-COST` 想做的"在卡上比较"省掉的是那 3 ms，**两个等待一分不减**。真正的杠杆是"每次 landing 少几趟卡上往返"。已发 #1633（`7177276720`）。
+→ 顺带纠正一个读数：帧行的 "copying back X MB" 是**看过**的字节数，真正写回只有 2–3 MB。
+
+### 21.3 ② `cargo xtask refusals` → **PR #2892**
+
+`xtask` 上游只有 `policy`；新增子命令把一次运行丢的东西一次说清：被拒管线（按 shader 分组）、调试层原话（有 `VICTORY_D3D12_DEBUG=1` 时）、完全不翻译的 shader（带 converter 原话）、每帧丢弃理由及速率。
+用真日志验证：一次运行就把 8 个被拒管线、14 类调试层消息、2 个不翻译 shader、以及"RT builder 每帧 1,412 次"一次列出，还顺带打印出两个 converter 的确切原因（`a lane mask holding lanes elsewhere read as data is not supported` / `a lane mask exchanged where not every lane runs is not supported`）。
+测试：`cargo test -p xtask` 8 passed（含 2 个新单测）；`clippy -p xtask --all-targets -D warnings` 干净。**1 文件 + xtask/src/refusals.rs（283 行）+ main.rs（11 行）。**
+（原计划是 PowerScript 工具，但 `tools/` **不在 Marvisak main 上**，而 `xtask` 在 —— 所以改成上游口径。）
+
+### 21.4 ① #2790 的画面：**同屏幕的帧像素完全相同**
+
+同基线的两次 300 s（都开 `VICTORY_CAPTURE`，2 的幂帧落盘）：
+
+| 帧 | 不同像素 | 平均差 |
+|---|---|---|
+| 1–1024（11 张） | **各 0 / 2,073,600** | 0.0000 |
+| 2048 | 40,833（1.97%） | 1.3992 |
+| 4096 | 228（0.011%） | 0.0022 |
+
+2048 那张不是"改动的视觉差异"：两次运行停在**不同屏幕**（一张韩文 `법적 공지`、一张英文 `LEGAL NOTICES`），键序差了一页。已把差异图与结论回评到 #2790（`7177608229`）。
+
+### 21.5 8 小时监控已上线
+
+- 脚本：`vlogs/monitor/snapshot.ps1`（PS 5.1；token 从 `owner` remote 的 push URL 读，不落盘）
+- 每轮采集：我们的 5 个 PR（状态/head/新评论，区分"别人说的"）、三条主干（Marvisak / fxceless / 我们自己）、`CLAIMS.md` sha、#1633 最后 5 条、**22 个 tracker 列出并持续更新的 fork** 的 `pushed_at`、以及 **gta6pconline.com 自己的头条**（每小时的摘要比单个仓库更全）
+- 产出：每轮一个 `20261126-HHmm.json` + 追加到 `git-monitor-report.md`（Action 在前、Signals 在后）
+- 定时任务：`schedule-d73b3261-87e9-46ae-b5f8-072af1d6a582`，**每 30 分钟 × 16 轮 = 8 小时**，从 08:15 本地时间开始
+- 规则：有 ACTION 当轮处理；上游把我们的事做掉了就关/改基；只有主干新提交就只记录；**全都没有时推进一个未认领项**（候选 `FIND-9` / `TEST-MED3-NAN` / `FIND-14` / `FIND-15` / `FIND-19`，先 `claiming:` 再动手）
+- 首轮已 bootstrap：现有评论都已回过（#2478 triage 20:18、#2790 fuzeofficlal 21:31、#1098 liuycsbxbxn 22:06）
+
+### 21.6 本轮新增的 worktree / 产物
+
+| 路径 | 内容 |
+|---|---|
+| `C:\Windows\Temp\wave64-raw` | #854 + stride（能跑的那份），卡上 B 臂由它构建 |
+| `C:\Windows\Temp\pr-wave64` | 把 #854 合进我们 main 的尝试：只剩 `lower.rs` 一个冲突，但 `descriptor_data` 被 PR 移进子模块 → 与 main 的同名内联函数重复，**没合完，留作下次** |
+| `C:\Windows\Temp\pr-copyback` | copy-back 四桶插桩（未提交，未开 PR —— 结论已发 #1633） |
+| `C:\Windows\Temp\pr-xtask` | **PR #2892** 的分支 `tools/xtask-refusals`（`dc7d199`，基于 `13f91ca`） |
+| `C:\Windows\Temp\frames-nofix` / `frames-fix` | 各 13 张抓帧（#2790 画面对比） |
+| `C:\Windows\Temp\victory.exe.{world1bak,blendfix,wave64,copyback,nofix}` | 各次实验的二进制 |
+
+### 21.7 重要教训
+
+- **Marvisak main（`13f91ca`）本身在这张卡上起不来**：抓帧那轮用 main 裸编，开场就 `device removed (0x887A0004)`；而我们合并 fxceless 后的 main 能跑 1,800 s。→ 给 main 的 PR 都要意识到"main 未合并 fork 的修复，卡上跑不动"，这也是 #1098/#2790 之类的价值所在。
+- `git remote get-url owner` 拿到的是 **fetch** URL（无 token），要 `--push`。
