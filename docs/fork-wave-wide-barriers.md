@@ -816,3 +816,20 @@ menu survives.
 - #96 — the measurement template this text follows.
 - `docs/fork-ray-tracing.md` — the other place where wave64 programs in two
   host waves must meet.
+
+### 2026-11-25 09:55: the fork's c96b4f2 is in, and it is worth 3x on the world path
+
+The merge `4f75cbf` brings fxceless's `c96b4f2` ("the depth bounds test works; faster
+defaults; textures are on the card before the character bake; one host copy per placed
+texture") onto this branch. Verified here:
+
+- `cargo build --profile diag -p victory --features diagnostics` clean;
+  `cargo test -p victory-gpu -p victory-hle --lib` → **121 + 101 passed**, 0 failed.
+- Seeded profile, `Enter` every 15 s, WARP, 185 s: **4.4–21.7 fps (mostly 5–14)**, world packs
+  opened (`core_restofworld001`), and **no device removal in the whole run** — where the run
+  before this merge was 1.6–1.8 fps and lost WARP's device 82 s in.
+
+So the world path on the software adapter is roughly 3x faster than it was two hours ago and
+survives five minutes. The three-frame picture cycle measured earlier was on the pre-merge
+tree at 9 fps on the loading screen; whether it still holds at 5–14 fps is the next thing to
+re-measure, with the same one-hash-per-frame method.
