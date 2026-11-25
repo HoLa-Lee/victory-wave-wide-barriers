@@ -1276,3 +1276,19 @@ accept them and the other's do not. The next things worth looking at are not in 
 input code at all — the window's style (the card's run may be exclusive or borderless while
 WARP's is windowed) and whether the menus respond to anything else (a mouse click that our
 keyboard stand-in cannot produce).
+
+### 2026-11-25 11:20: a shorter key hold does not change the card's mind either
+
+`VICTORY_KEY_HOLD` (milliseconds; 200 by default) makes a scripted key a tap of any length.
+On the card at 30 fps a 200 ms press spans six frames, which a menu that wants a fresh press
+could read as a hold; a 40 ms press spans one. Card, 95 s, `VICTORY_KEY_HOLD=40`, otherwise the
+same forty-second recipe: eight world packs, **no story packs**, no device removal — the same
+result as 200 ms.
+
+So the card's menus ignore the keyboard on this title however the key is shaped, while WARP's
+walk the whole flow with the same code. What this report can say with confidence is the
+negative: **scripted keys cannot drive the card's menus in this build**, and the four things
+that could have explained it (focus, delivery, pad polling, hold length) are each measured and
+ruled out. Anything measured on the card past the menus should be treated as unreachable until
+that is solved, and the world work this report did — the 40-second recipe, the story packs, the
+1.6 fps cost — was all on WARP.

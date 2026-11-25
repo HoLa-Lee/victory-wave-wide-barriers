@@ -830,7 +830,7 @@ fn forget(this: This, token: u64) {
 extern "system" fn stop_callback(this: This, token: u64) {
     forget(this, token);
 }
-/// Stops the callback, then waits up to `timeout` 纰宻 for a call of it that
+/// Stops the callback, then waits up to `timeout` 绾板 for a call of it that
 /// is running; false on time-out, or from inside that callback (it cannot
 /// wait for itself), as documented. Either way it is never called again.
 extern "system" fn unregister_callback(this: This, token: u64, timeout: u64) -> bool {
@@ -1190,7 +1190,7 @@ mod host {
                     }
                 }
                 // `VICTORY_PAD_TRACE=1`: once a second, what the scripted keys
-                // put on the first pad 鈥?the question being whether a title
+                // put on the first pad 閳?the question being whether a title
                 // that ignores the keys on one adapter ever sees them at all.
                 pad_trace(pressed);
             }
@@ -1238,8 +1238,21 @@ mod host {
         }
     }
 
-    /// `VICTORY_PAD_TRACE=1`: once a second, whether our window is the foreground
-/// one and how many scripted keys the keyboard device was given — the two
+    /// How long a scripted key is held (`VICTORY_KEY_HOLD`, milliseconds; 200 by
+/// default). A title that samples input once a frame sees a longer hold as a
+/// hold rather than a tap, and a menu that wants a tap ignores it.
+fn key_hold() -> std::time::Duration {
+    static HOLD: std::sync::OnceLock<std::time::Duration> = std::sync::OnceLock::new();
+    *HOLD.get_or_init(|| {
+        std::env::var("VICTORY_KEY_HOLD")
+            .ok()
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .map_or(std::time::Duration::from_millis(200), std::time::Duration::from_millis)
+    })
+}
+
+/// `VICTORY_PAD_TRACE=1`: once a second, whether our window is the foreground
+/// one and how many scripted keys the keyboard device was given 鈥?the two
 /// facts that differ between an adapter whose menus move and one whose do not.
 #[cfg(feature = "diagnostics")]
 fn keys_trace(focused: bool, scripted: usize) {
@@ -1271,7 +1284,7 @@ fn keys_trace(focused: bool, scripted: usize) {
 }
 
 /// `VICTORY_PAD_TRACE=1`: how often anything asked for scripted keys, and how
-/// many were live 鈥?the question being whether a title that ignores them ever
+/// many were live 閳?the question being whether a title that ignores them ever
 /// asks at all.
 static SCRIPTED_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static SCRIPTED_KEYS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -1332,7 +1345,7 @@ fn script_trace() {}
         let now = start.elapsed();
         let pressed: Vec<u8> = keys
             .iter()
-            .filter(|&&(at, _)| (at..at + Duration::from_millis(200)).contains(&now))
+            .filter(|&&(at, _)| (at..at + key_hold()).contains(&now))
             .map(|&(_, vk)| vk)
             .collect();
         SCRIPTED_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
