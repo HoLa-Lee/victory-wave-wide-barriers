@@ -1420,3 +1420,22 @@ list), or `ExecuteIndirect` with a mesh signature, `max 1`, zero counts and this
 scratch buffer is itself the invalid call. The next look is `indirect.rs`'s mesh branch and what
 it hands `ExecuteIndirect` when the clamp produces no records at all — a path that until now has
 been reached only by a title that writes its arguments first.
+
+### 2026-11-25 12:15: the D3D12 debug layer is installed, and on this death it stays silent
+
+`Tools.Graphics.DirectX~~~~0.0.1.0` was `NotPresent` on this machine — the reason every run said
+`no D3D12 debug layer (0x887A002D)`. It is now installed
+(`Add-WindowsCapability -Online -Name Tools.Graphics.DirectX~~~~0.0.1.0`, no restart needed) and
+`D3D12GetDebugInterface` succeeds: a run with `VICTORY_D3D12_DEBUG=1` no longer prints that
+warning.
+
+Then the world-death choreography again, 280 s, WARP, `VICTORY_D3D12_DEBUG=1
+VICTORY_D3D12_DRED=1`: story packs open (7), the device goes, and the log holds **no debug
+layer message at all** — no `D3D12 ERROR`, and the failure text's `log_messages()` has nothing
+to add. So the death is not an API misuse the validation layer sees; it is a GPU-side fault or
+hang, which is what the empty breadcrumbs have been saying all along.
+
+What the layer does unlock is **GPU-based validation** (`VICTORY_D3D12_GBV=1`, which needs the
+debug layer): out-of-range descriptor reads become messages instead of card resets, and this
+title indexes its heap directly. That is the next run, and the first one this machine could
+ever have made.
