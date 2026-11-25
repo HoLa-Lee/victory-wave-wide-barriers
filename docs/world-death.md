@@ -732,3 +732,25 @@ compared from these lines. What is needed next is a same-phase A/B: the same 300
 captured frames, with `VICTORY_TEXTURE_REFRESH_EVERY=8` off and once with it on, then once with
 `VICTORY_DETILE_WRITTEN=1` and the stride off. The counters to compare are `textures` ms and the
 MB it names, and the capture at frame 2048 as the correctness gate.
+
+## Written-only detiling is correct and slower than the stride — the shape of the check is wrong
+
+Same choreography, same switches, with the stride **and** written-only detiling together:
+
+```
+1.0 fps, 996.9–1022.4 ms (preparing 570.5–954.9: copies 28.3–38.3 ms 78.0–107.2 MB,
+  textures 481.3–906.8 ms 5.8–18.3 MB; GPU 14.0–39.1 ms; copy-back 23.0–60.0 ms),
+  1092–1464 draws
+captures: 4,186,668 and 4,316,455 bytes — the key art, complete
+```
+
+Against the stride alone at the same phase (896–1,153 draws, textures 17.3–384.9 ms), the pair is
+**slower**: about 1,000 ms a frame against 145–522. So the implementation, not the idea, is what is
+costing: `detile_where` asks its predicate per contiguous run (`walk` reports many), and the
+predicate scans the whole merged range list — O(runs × ranges) — while the copy side does one
+kernel read per range instead of one for the texture.
+
+The fix is the shape of the check: a 64 KiB page **bitmap** of what the write watch named (the page
+size the watch itself uses), a `u64` word looked up per run, and a single read per contiguous span
+of set bits. Until that exists, `VICTORY_DETILE_WRITTEN` stays off and the stride stays the way to
+run the story at 6.5 fps.
