@@ -394,3 +394,40 @@ that way — it starts the title, keeps it in the foreground and taps keys on a 
 With that in hand the card's world — the only place the story's ten gigabytes of texture copies
 have 16 GB of VRAM to land in — is reachable, which is what every previous section of this
 document said it was not.
+
+## The card reaches the story — and thrashes on host memory, not on the GPU
+
+With `tools/drive_card.ps1` and the repeating choreography `Up, Enter, Up, Enter, Down, Down,
+Enter` every ten seconds from 60 s to 285 s (real keys: the card ignores scripted ones), 300 s:
+
+```
+start 06:12:31   story packs open 06:14:48   (2 min 17 s)
+story_packs=7  world_packs=8   device removals=0   traps=0
+capture at frame 2048: the story's key art, 4.2 MB, rendered
+```
+
+**The card's story opens and renders, with no device removal and no trap** — the first time this
+branch has had the story on the real GPU. What it does *not* do is run: the frame line reads
+
+```
+0.2 fps, 4477.7 ms/frame (3804.5 preparing: copies 90.3 ms 175.3 MB …, …)
+0.1 fps, 9301.2 ms/frame (7120.9 preparing: …)
+```
+
+**3.8 to 7.1 seconds of the frame are the layer's own "preparing"**, not the card. And the memory
+line at that moment:
+
+```
+26829 MB private (18601 MB of it in memory; 5081 MB free, 16083 MB left to commit)
+host copies of title memory: 4220 alive 4195 MB, 748 windows outside buffers 3208 MB
+staging of textures: 136 alive 43 MB
+```
+
+26.8 GB private with only 18.6 GB resident — **eight gigabytes paged out to disk**, which is what
+a 0.1 fps frame looks like. So the same conclusion as on WARP, only the failure mode differs: the
+world needs more host memory than this machine has for a title whose textures must be duplicated,
+and on the card that shows up as paging instead of a suspended device.
+
+The next lever is therefore not the GPU at all: it is the layer's per-frame preparation (3.8–7 s)
+and the 26.8 GB of host state behind it — the budgeted cache this document asked for, with the
+card's numbers now as the target: keep private bytes under ~20 GB and the story should run.
