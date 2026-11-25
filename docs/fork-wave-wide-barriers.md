@@ -862,6 +862,47 @@ here now, with a unit test that the slot answers `S_OK` while the host device li
 (`victory-gpu` 115 passed). This is the `0x887A0004` half of every failure line: the
 console's own answer is now the host's answer instead of a made-up one.
 
+### 2026-11-25 11:30: the debug layer is not on this machine, and the wall is about a thousand frames
+
+The failure text of every world run ends `a diagnostics build with VICTORY_D3D12_DEBUG=1
+names the command`. It cannot, here: **`C:\Windows\System32\d3d12sdklayers.dll` does not
+exist on this machine**. The D3D12 debug layer and the DRED settings interface both
+come from that DLL (the "Graphics Tools" optional feature), so with
+`VICTORY_D3D12_DEBUG=1` the run had `host.messages == None` and printed **zero**
+`D3D12:` lines while the world ran 150 s and never lost the device. The same absence is
+why every DRED run read `0x887A0004` (the refusal of
+`GetAutoBreadcrumbsOutput`) and `breadcrumbs` was `[]`: DRED needs the same interface.
+So "the layer names the command" is not available as a probe on this box, and the next
+diagnostic has to be ours.
+
+**What the runs do agree on is a frame count, not a clock.** `frame presented` prints at
+powers of two, which is enough to bracket each death:
+
+| run | arm | last `frame=` printed | device gone |
+|---|---|---|---|
+| seed2 | defaults, before the merges | 1024 | 01:14:33 |
+| seed3 | defaults | 1024 | 01:51:59 |
+| sweep0 | `VICTORY_TEXTURE_SWEEP=0` | 1024 | 02:39:33 |
+| sweepA | heap pass sliced | 512 | 02:02:20 |
+| relay0 | `VICTORY_RELAY=0` | 512 | 02:35:34 |
+| seed4 | heap pass sliced | 512 | none in 107 s |
+| sweepB | `VICTORY_HEAP_SWEEP=1` | 512 | none in 94 s |
+| dbg | `VICTORY_D3D12_DEBUG=1` (no layer) | 512 | none in 150 s |
+
+Every run that reached 1,024 world frames lost the device; every run that was still
+under 1,024 when it was killed had not. The debug-layer arm is the clearest case: 0.1-0.8
+fps meant 150 s bought only 512 frames, so its "survival" is not evidence about the
+switch at all — and neither is any other arm's, unless it is counted in frames.
+
+Two probes follow from that, in this order:
+
+1. **A ring of the last submissions**, dumped by `removal_context` (which is on by
+   default through `VICTORY_TRAIL`): the lists in each of the last few submissions, the
+   draws in them and the pipeline hashes they used. Since the layer that would name the
+   command is not installed, ours has to keep the last few.
+2. **`VICTORY_CAPTURE` at frames 512 and 1024**: if the picture is already wrong a few
+   frames before the death, the bad submission is older than the removal.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
