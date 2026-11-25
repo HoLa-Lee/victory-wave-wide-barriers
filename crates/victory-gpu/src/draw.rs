@@ -2596,7 +2596,7 @@ impl State {
             let draws: u32 = census.1.values().sum();
             if draws > 0 {
                 let mut rects: Vec<([i32; 4], u32)> = census.1.iter().map(|(r, n)| (*r, *n)).collect();
-                rects.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+                rects.sort_unstable_by_key(|r| std::cmp::Reverse(r.1));
                 let scissors: Vec<String> = rects
                     .iter()
                     .take(5)
@@ -3349,7 +3349,7 @@ impl State {
                     // the record drawn before it.
                     if (6..=8).contains(&why_not) {
                         static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                        if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 256 == 0 {
+                        if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed).is_multiple_of(256) {
                             let (last_copy, last_offset) = self.last_indirect;
                             tracing::info!(
                                 "a window miss (one in 256): cause {why_not}, kind {kind}, stride {stride}, buffer {} offset {offset:#x} ({} left); the command before it on the list: buffer {last_copy} offset \
@@ -3628,6 +3628,8 @@ fn readable(list: &HostList, kind: ResourceType, view: &View) {
         (View::Unordered(resource, _, _), ResourceType::Uav) => {
             #[cfg(feature = "diagnostics")]
             crate::capture::note_target(*resource as This);
+            // Some compute-written textures are also read by the title CPU.
+            list.texture_written(*resource as This);
             // Unordered access to a depth texture is its colour twin's.
             if !list.twin_use(*resource as This, true, true) {
                 crate::list::ensure_state(list, *resource as This, UNORDERED_ACCESS);

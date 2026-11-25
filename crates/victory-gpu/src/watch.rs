@@ -307,6 +307,13 @@ pub(crate) fn wrote_own(page: usize, others: &[usize]) -> (u64, u64) {
     (before, now)
 }
 
+/// The asking that last found the 64 KiB page numbered `page` written (0:
+/// never). Read only, for `crate::backreads`.
+#[cfg(feature = "diagnostics")]
+pub(crate) fn stamp(page: usize) -> u64 {
+    JOURNAL.lock().unwrap_or_else(|e| e.into_inner()).written.get(&page).copied().unwrap_or(0)
+}
+
 /// One kernel asking for `pieces` (page ranges in order); by halves if it
 /// fails, as a run across two reservations or into memory that is not
 /// write-watched does. A piece alone is left to [`writes`].
@@ -478,7 +485,7 @@ pub(crate) fn writes(start: usize, end: usize, guarded: bool) -> Option<(u64, Ve
 fn failed_asking(start: usize, end: usize) {
     use windows_sys::Win32::System::Memory::{MEMORY_BASIC_INFORMATION, VirtualQuery};
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 2048 != 0 {
+    if !N.fetch_add(1, std::sync::atomic::Ordering::Relaxed).is_multiple_of(2048) {
         return;
     }
     // SAFETY: plain data filled in by the query.
@@ -869,7 +876,7 @@ fn protect_here(g: &mut Guards, from: usize, to: usize) {
                 #[cfg(feature = "diagnostics")]
                 {
                     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                    if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 1024 == 0 {
+                    if N.fetch_add(1, std::sync::atomic::Ordering::Relaxed).is_multiple_of(1024) {
                         tracing::info!("a block of title memory could not be made read-only (one in 1024): {:#x}: {error}", block * BLOCK);
                     }
                 }
@@ -1109,6 +1116,10 @@ pub fn title_memory_reading_now() -> Option<Reading> {
 /// shows is new and read-write, so it is no longer guarded (nor known
 /// unmapped).
 pub fn title_memory_remapped(at: usize, len: usize) {
+    // Stored pages followed there end (`VICTORY_BACK_READS`): counted only.
+    #[cfg(feature = "diagnostics")]
+    crate::backreads::remapped(at, len);
+    crate::texback::remapped(at, len);
     // A placed texture there arrives, goes or changes with no descriptor
     // written.
     crate::descriptor::host::remapped(at, len);
