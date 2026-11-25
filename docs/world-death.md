@@ -68,3 +68,23 @@ buffer refresh counters), `VICTORY_PRESENT_FENCE`, `VICTORY_SKIP_EMPTY_INDIRECT`
 five argument words with its neighbourhood, and the `d3d12_probe` example. All off by default
 except the two pad/present traces' dependencies, and each documented in
 `fork-wave-wide-barriers.md` with the run that motivated it.
+
+## How repeatable it is
+
+Eight runs of the recipe above, timed from the first log line:
+
+| run | story packs open | device removed | or |
+|---|---|---|---|
+| `keys2` | 178 s | 221 s | |
+| `args` | 178 s | 215 s | |
+| `argsub` | 178 s | 219 s | |
+| `around` | 178 s | 227 s | |
+| `dbg3` | 178 s | 211 s | |
+| `post310` | 178 s | 219 s | |
+| `skip2` | 178 s | — | title crash |
+| `skipind` | 178 s | — | title crash |
+
+The story opens at **178 s in all eight**, and the device goes **33–49 s later** in every run
+that is not given `VICTORY_SKIP_EMPTY_INDIRECT=1` — a spread of 16 s over six runs. A fault that
+depends on what a frame contains would not be this regular; one that depends on how much has
+accumulated by then would.
