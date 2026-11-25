@@ -1004,3 +1004,23 @@ three costs as before, now with content that is worth optimising for.
 Two things made the difference, both this session's: **the pad sticks the scripted keys now move**
 (without them the terms page cannot be accepted) and **`VICTORY_FAST=1`** (without it the cutscene
 would run at a tenth of a frame a second).
+
+## The cutscene plays, shot after shot
+
+A 700 s run with the same schedule, capturing every 200th frame from 5000:
+
+```
+frame 5000: 2,382,286 bytes   a character in a lit room
+frame 5200:   421,993 bytes   dark, a close-up
+frame 5400: 1,538,204 bytes   another shot
+frame 5600: 1,009,324 bytes   another
+frame 5800: 1,651,128 bytes   a shoulder and hair in rim light, letterboxed
+```
+
+Each frame is a different shot — the intro cinematic is **advancing**, in letterbox, with the
+title's own framing, at 0.6–1 fps, and the run ended alive at 700 s with no removal and no trap.
+Nothing was sent to the game after 285 s except `Enter` every ten seconds, so the cutscene is
+playing on its own, as it should.
+
+This is where the branch stands: the flow runs, the saves commit, the world streams, and the
+opening cutscene renders.
