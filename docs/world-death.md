@@ -1155,3 +1155,21 @@ david scott / tony mesones” in pink neon over a night scene with trees and fir
 
 So after the fork's performance night the branch runs the whole opening — loading, cutscene, credits
 — at 2.5–7.9 fps depending on the shot, with the pictures right and no removal.
+
+## The opening needs the odd `Enter` to move on, and nothing else
+
+Two 900 s runs with the same switches and route, differing only after the setup pages:
+
+- **no input after 128 s**: frame 4800 (2,146,220 bytes) and frame 6000 (2,482,809 bytes) are the
+  same shot — a woman with a blonde ponytail looking out at a compound in the sunset — held for the
+  rest of the run;
+- **`Enter` every 8 s**: the same shot then the credit crawl (frame 4200, `docs/credits-crawl.png`).
+
+So the opening is a sequence of beats that each want an `A` press, and a run that stops pressing
+sits on one shot however long it is given (900 s was not enough). The schedule is therefore part of
+the route: with the merge's 2.5–8 fps the pages and the beats come three to four times faster than
+they did when the timings were first written down, and a fixed time table has to be re-timed when
+the frame rate changes — that is the lesson to carry into any future run.
+
+Both runs were alive at 900 s with no device removal and no trap, with story packs 7 and world
+packs 8, at 2.5–7.9 fps by shot.
