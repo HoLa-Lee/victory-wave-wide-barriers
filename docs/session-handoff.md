@@ -401,3 +401,25 @@ cc940a4  2026-11-25T06:24:11Z  Forge status …
 ### 还有一条判断口径要继承
 
 `FIND-20` 里那条"不是并发、不是缓存、不是没等 GPU"的结论，是**用三次实验证伪**出来的；同理，本项目里任何"看起来是竞争"的现象，先做**单进程重复**实验再下结论（单测独跑 3/4 失败这一步就推翻了并发的直觉）。
+
+### 17.1 推送用的 token（按操作者要求写在**工作区** HANDOFF，不入库）
+
+```
+<TOKEN — kept out of the repository; it lives in the workspace HANDOFF.md only>
+```
+
+用法（classic PAT，账户 `HoLa-Lee`，有 repo 作用域）：
+
+```powershell
+$token='<TOKEN — kept out of the repository; it lives in the workspace HANDOFF.md only>'
+git -C victory-fork-history push "https://HoLa-Lee:$token@github.com/HoLa-Lee/victory-wave-wide-barriers.git" HEAD:main
+# PR 分支
+git -C C:\Windows\Temp\pr-warp push "https://HoLa-Lee:$token@github.com/HoLa-Lee/victory-wave-wide-barriers.git" tests/warp-tests-take-turns:tests/warp-tests-take-turns
+# GitHub API（读 CLAIMS.md、PR、issue）
+Invoke-RestMethod "https://api.github.com/repos/Marvisak/VIctory/issues/1633" -Headers @{ 'User-Agent'='dsh'; 'Authorization'="Bearer $token" }
+```
+
+注意事项：
+- **不要**把这个文件（或其副本）提交到仓库 —— `victory-fork-history/docs/session-handoff.md` 是**去掉了 token 的版本**，每次同步时要保持这一点
+- 该 token 只能用于 `HoLa-Lee` 名下仓库与公开 API 读；对 `Marvisak/VIctory` **无写权限**（所以只能开 PR，不能直接评论到别人的 issue 之外的操作——评论可以，issue 评论走公开仓库是允许的）
+- 若泄漏：GitHub → Settings → Developer settings → Tokens 里立即 revoke 并重新签发
