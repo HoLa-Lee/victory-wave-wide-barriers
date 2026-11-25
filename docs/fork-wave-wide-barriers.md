@@ -653,6 +653,46 @@ One surface only: enumerating the title's windows during boot finds a single
 visible one (`sgaWindowClass`, 2474×1392, our presenter's), so the animation is
 not a second window either.
 
+### 2026-11-25 09:35: the regression reproduces — the presented stream cycles through three pictures
+
+With a seeded `Z:\settings\settings.xml` (the profile that skips the setup
+pages) and `Enter` every 15 s, WARP reaches the Rockstar loading screen — seven
+stars — and there the presented stream does exactly what the report describes.
+Every frame 150–400 captured, one hash each, in order:
+
+```
+320 AA284D   321 BE0541   322 129F39
+323 702F55   324 BE0541   325 129F39
+326 702F55   327 BE0541   328 129F39
+329 702F55   330 BE0541   331 C1D275
+332 702F55   333 BE0541   334 C1D275
+...
+339 5E2691   340 C1D275   341 702F55
+342 5E2691   343 C1D275   344 702F55
+```
+
+A strict cycle of **three** pictures. A picture that is new appears every third
+frame and takes the oldest one's place; the two older ones are shown again in
+between. On screen that is the loading pulse advancing one step per three
+frames while the frames in between show where it was — the "goes back a frame"
+the report names, and it is 9–10 fps with 39 draws a frame.
+
+What it is **not**:
+
+- not `late_free_present()`: every one of those presents logs `behind=0` and
+  `sent_ahead=false` (the default path settles the flights and waits for the
+  card before `Present`);
+- not a deferred refresh: `0 skipped` in every copystat line of the run, at
+  339–371 MB of refreshes a frame;
+- not a second surface: one visible window (`sgaWindowClass`).
+
+What is left, and the next probe: the frame that is copied is one of a ring —
+three host textures (or three title render targets behind one host texture)
+whose contents are refreshed one per present, so each present shows the member
+whose refresh landed one, two and three presents ago. Reading `resource.rs`'s
+`host_copy`/`let_go_idle` path for the presented texture, and logging which
+host resource id each present copied, settles which ring it is.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
