@@ -710,3 +710,25 @@ the count above sums), and the detile would be applied per block of the tiled la
 the whole read. The layout code knows the block size; the pieces are the mapping from a written
 byte range to the blocks that cover it, and a detile that takes a range. Until that exists, the
 stride remains the way to run the story at 6.5 fps.
+
+## Written-only detiling, implemented: the picture is right, the measurement is not clean yet
+
+`VICTORY_DETILE_WRITTEN=1` (new): the refresh copies out of title memory **only the pages the
+write watch named**, merges them into ranges, and detiles **only the runs covering them**
+(`Layout::detile_where` in `victory-formats`, a predicate over each contiguous run `walk` reports).
+The rest of the staging buffer is already correct from the previous refresh.
+
+Card, story, with `SAMPLE_SKIP=1` as well:
+
+```
+0.4–0.8 fps, 1308.8–2375.9 ms (textures 375.6–2186.6 ms, 101.6–302.1 MB; GPU 25.7–159.9 ms;
+  copy-back 41.4–90.3 ms), 1196–5474 draws
+captures: 3,914,194 and 4,172,459 bytes — the story's key art, complete
+```
+
+**The picture is right** (that is the point of a selective detile), and the runs are in a heavier
+phase than the stride measurements (1,196–5,474 draws against 896–1,228), so the two cannot be
+compared from these lines. What is needed next is a same-phase A/B: the same 300 s, the same
+captured frames, with `VICTORY_TEXTURE_REFRESH_EVERY=8` off and once with it on, then once with
+`VICTORY_DETILE_WRITTEN=1` and the stride off. The counters to compare are `textures` ms and the
+MB it names, and the capture at frame 2048 as the correctness gate.

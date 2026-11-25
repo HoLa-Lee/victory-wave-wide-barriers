@@ -826,9 +826,40 @@ impl Staging {
             }
             // Read through the copy, which stands unmapped pages: memory of
             // big pools is too slow to ask page by page.
+            let only_written = std::env::var_os("VICTORY_DETILE_WRITTEN").is_some();
             with_read(size, |read| {
-                crate::host::copy_mapped(read.as_mut_ptr(), self.memory, size, false);
-                self.detile(read);
+                if only_written {
+                    // `VICTORY_DETILE_WRITTEN`: only the pages the write watch
+                    // named are read out of title memory and only the runs
+                    // they cover are detiled — a fifth to a seventh of the
+                    // bytes, measured (docs/world-death.md).
+                    let mut ranges: Vec<(usize, usize)> = written
+                        .iter()
+                        .filter_map(|&(at, len)| {
+                            let from = at.saturating_sub(start) as usize;
+                            (from < size && len > 0).then_some((from, (len as usize).min(size - from)))
+                        })
+                        .collect();
+                    ranges.sort_unstable();
+                    let mut merged: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
+                    for (from, len) in ranges {
+                        match merged.last_mut() {
+                            Some(last) if from <= last.0 + last.1 => {
+                                last.1 = (from + len).max(last.0 + last.1) - last.0;
+                            }
+                            _ => merged.push((from, len)),
+                        }
+                    }
+                    for &(from, len) in &merged {
+                        crate::host::copy_mapped(read[from..].as_mut_ptr(), unsafe {
+                            self.memory.add(from)
+                        }, len, false);
+                    }
+                    self.detile_where_loaded(read, &merged);
+                } else {
+                    crate::host::copy_mapped(read.as_mut_ptr(), self.memory, size, false);
+                    self.detile(read);
+                }
             });
             #[cfg(feature = "diagnostics")]
             crate::copystat::add(crate::copystat::C::TexWatched, size as u64);
@@ -1002,6 +1033,41 @@ impl Staging {
     }
 
     /// Detiles `tiled` (the texture's memory) into the staging buffer.
+    /// [`Staging::detile`] for the runs covering `ranges` (byte ranges of the
+    /// tiled memory that were read): every other run is already correct in
+    /// the staging buffer from the last refresh.
+    fn detile_where_loaded(&self, tiled: &[u8], ranges: &[(usize, usize)]) {
+        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        for (i, (footprint, &rows)) in self.footprints.iter().zip(&self.rows).enumerate() {
+            let (mip, slice) = (i as u32 % self.mips, i as u32 / self.mips);
+            let f = footprint.Footprint;
+            let pitch = f.RowPitch as usize;
+            let len = pitch * rows as usize * f.Depth as usize;
+            // SAFETY: the subresource's part of the mapped staging buffer.
+            let linear = unsafe {
+                std::slice::from_raw_parts_mut(self.data.add(footprint.Offset as usize), len)
+            };
+            let base = footprint.Offset as usize;
+            let _ = self.layout.detile_where(
+                tiled,
+                mip,
+                slice,
+                linear,
+                pitch,
+                pitch * rows as usize,
+                |t, len| {
+                    // `walk` reports offsets into the whole tiled buffer for
+                    // the texture; the ranges are the same space.
+                    let (from, to) = (t, t + len);
+                    let _ = base;
+                    ranges
+                        .iter()
+                        .any(|&(r, l)| from < r + l && r < to)
+                },
+            );
+        }
+    }
+
     fn detile(&self, tiled: &[u8]) {
         self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
         #[cfg(feature = "diagnostics")]

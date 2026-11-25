@@ -1,4 +1,4 @@
-//! Texture layouts of the console GPU (RDNA2, GFX10.3): a texture's size and
+﻿//! Texture layouts of the console GPU (RDNA2, GFX10.3): a texture's size and
 //! alignment, where each mip and array slice starts, the address of each
 //! element, and copies between tiled memory and linear rows.
 //!
@@ -596,6 +596,26 @@ impl Layout {
     ) -> Result<(), Error> {
         self.walk(tiled.len(), mip, slice, linear.len(), row_pitch, depth_pitch, |t, l, len| {
             linear[l..][..len].copy_from_slice(&tiled[t..][..len]);
+        })
+    }
+
+    /// [`Layout::detile`] for the runs a predicate keeps: only the parts of
+    /// the tiled memory that changed are detiled, the rest of `linear` left
+    /// as it is. `keep` is given (tiled byte offset, length).
+    pub fn detile_where(
+        &self,
+        tiled: &[u8],
+        mip: u32,
+        slice: u32,
+        linear: &mut [u8],
+        row_pitch: usize,
+        depth_pitch: usize,
+        mut keep: impl FnMut(usize, usize) -> bool,
+    ) -> Result<(), Error> {
+        self.walk(tiled.len(), mip, slice, linear.len(), row_pitch, depth_pitch, |t, l, len| {
+            if keep(t, len) {
+                linear[l..][..len].copy_from_slice(&tiled[t..][..len]);
+            }
         })
     }
 
