@@ -814,3 +814,24 @@ Story-phase medians (500+ draws): **1,298 ms a frame, textures 191 ms moving 9 M
 So this is the line to quote from now on: `VICTORY_FAST=1` plus `tools/drive_card.ps1` runs the
 story on the card at a frame every 0.4–1.3 s with the picture right, and every other switch in
 this document is either a diagnostic or a step towards doing better than that.
+
+## The card reproduces the first-run loop: the story loads, then the legal notices come back
+
+A 480 s card run with `VICTORY_FAST=1`, the same keys, captures through the second half:
+
+```
+story packs 7, world packs 8, no device removal, no trap, alive at 480 s
+frames 2600/3000/3400: 1,649,731 / 1,695,959 / 1,670,574 bytes
+frame 3400: the legal-notices page, in Korean, with "다음" (Next) selected
+HDR mode lines: 6 (six display/screen transitions)
+settings.xml: 3,921 bytes, the seeded file, still unchanged
+```
+
+So on the **card** the sequence is the one the first-run work describes: the story's packs open and
+its key art renders, and then the flow comes back to the legal notices, with the settings file it
+was given never written. That is the same loop the WARP runs showed, now on the real GPU with the
+story's assets loaded — so it is not an artifact of the software rasteriser, and it is the thing
+that stands between this branch and a playable world.
+
+Everything else held for the whole eight minutes: no removal, no trap, `VICTORY_FAST=1` keeping
+the frame at 0.6–1.8 fps (1,417 and 561 ms in the last two lines, textures 9–252 ms).
