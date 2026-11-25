@@ -1143,3 +1143,19 @@ there than on WARP), so everything above is the world's *loading* phase. The nex
 side is the same run with a longer key script, and the honest risk that comes with it: three
 reports in this repository have a card freezing hard in the world, so it stays a
 single-shot 2–3 minute run that gets checked for a living machine afterwards.
+
+### 2026-11-25 11:10: a WARP world run that simply keeps going
+
+A second session's world run (`sweep0`), same build, seeded profile, WARP:
+
+- started 10:36:55, still presenting at 11:10 — **33+ minutes in the world**, 2–3 fps
+  (355–610 ms a frame), 11–12 draws;
+- **9.85 GB working set**, ~2.8 cores of CPU in steady state, 0 device removals, 0 black frames
+  in the last 0.8 MB of log, seven `story000` packs open.
+
+Three things that follow. The world on the software adapter is slow but **durable** — over half
+an hour without losing the device, where the earlier builds died within seconds. Memory is the
+next wall worth watching: 9.85 GB resident for one title is why this machine's free memory line
+matters (`8,881 MB free, 29,073 MB left to commit` in the run above). And a run like this owns
+the machine: with it going, no other measurement is worth taking (this round took none), which
+is the practical cost of the world being 2 fps on WARP.
