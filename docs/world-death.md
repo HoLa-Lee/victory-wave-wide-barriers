@@ -926,3 +926,34 @@ level save of 242 KB, and the profile settings.** Starting the game again with t
 place (a second 300 s run) still loads the story and still comes back to the legal notices, with
 the story's key art captured at frame 2048 (4,184,044 bytes) and the later screen at 2400
 (1,623,261). Whatever brings the flow back is therefore not a missing or failed save.
+
+## The "loop" is the terms page, and the confirm button is disabled
+
+A filmstrip of a 420 s run (`VICTORY_CAPTURE_FRAMES` at every 300th frame) shows the whole flow:
+
+```
+frames 256–1500:  39 KB   the loading stars
+frame  1800:     104 KB   a transition
+frame  2048:   4.33 MB    the story's key art
+frame  2100:      48 KB   dark transition
+frames 2400–3600: 1.62–1.73 MB  the setup pages
+```
+
+and frame 3600 is **ROCKSTAR GAMES 법적 약관 & 정책** (Terms of Service & Privacy Policy) with:
+
+- “개인 정보 보호 정책을 읽었으며 이에 이해했습니다” — **checked**
+- “서비스 약관을 읽었으며 이에 동의합니다” — **not checked**
+- the **확인 (Confirm) button greyed out and disabled**
+- the legend at the bottom: **“스크롤 ⑥  선택 Ⓐ  뒤로 Ⓑ”** — scroll, select, back
+
+So nothing is looping and nothing is failing: the title is waiting on a page whose confirm button it
+disables until the terms are accepted, and the acceptance needs a **scroll** (the right stick, per
+the legend) that this layer cannot deliver — the title never polls our stand-in pad
+(`Source::pad` has zero calls in every run, measured earlier), so no stick exists to scroll with.
+
+Pressing Down 30 times and then Enter (a follow-up 420 s run) leaves the same page on screen, which
+fits: focus moved, the text did not scroll, and the checkbox stayed disabled.
+
+**That makes the next piece of work an HLE gap, not a game mystery**: the title's UI needs a gamepad
+device to scroll with. Advertising one (so `GameInput` reports a pad our stand-in fills) is what
+unlocks every page of this flow — and with it, presumably, the first playable frame.
