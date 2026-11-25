@@ -431,3 +431,41 @@ and on the card that shows up as paging instead of a suspended device.
 The next lever is therefore not the GPU at all: it is the layer's per-frame preparation (3.8–7 s)
 and the 26.8 GB of host state behind it — the budgeted cache this document asked for, with the
 card's numbers now as the target: keep private bytes under ~20 GB and the story should run.
+
+## Why the card's story runs at 0.1 fps: 24,821 texture refreshes per frame, none skipped
+
+The frame line at the bottom of the card's story, read in full:
+
+```
+0.1 fps, 9301.2 ms/frame (7120.9 preparing: copies 57.1 ms 169.7 MB, textures 7000.6 ms 450.4 MB;
+  177.1 on the GPU; 23.2 copying back 5.3 MB), 8490 draws/frame,
+  dropped 1935 without a host pipeline (0 being made) and 8 indirect;
+  heap buffers 1.0 passes 904.1 ms; … texture slots written so far: 229177 placed, 70603 of objects
+```
+
+and the two counters under it:
+
+```
+copies per frame: 61.0 submissions; 19959 title copies 11.6 MB; 24821 refreshes 24839.3 MB,
+  0 skipped 0.0 MB; … moves 45.68 ms, 284.65 MB unmapped; 210245 page faults
+texture refreshes per frame, all threads: 7000.4 ms, of them 0.0 ms waiting for a texture another
+  thread is refreshing, 8.7 ms asking the write watch and the guards, 6814.2 ms waiting for title memory
+```
+
+**24,821 texture refreshes pulling 24.8 GB per frame, with `0 skipped`** — this layer re-reads every
+texture's title memory every frame, decides nothing has changed in only 8.7 ms of write-watch
+work, and then spends **6,814 ms waiting for title memory** while the machine takes 210,245 page
+faults. The title's texture memory is file-backed (its page pool) and has been paged out, so each
+refresh is a disk read.
+
+That is the whole story: 8,490 draws and a 904 ms heap pass are the small numbers. The frame is
+7 s of texture refresh against paged-out title memory, at 450 MB of uploads per frame.
+
+Two changes follow, in this order:
+
+1. **Skip the refresh when nothing wrote.** The write watch and the guards already say "unchanged"
+   in 8.7 ms; the refresh runs anyway. Respecting that answer alone should take the story from
+   0.1 fps to the GPU's own cost.
+2. **Do not touch title memory that is not going to be uploaded.** `0 skipped` also means every
+   texture's memory is *read*, which is what faults it back in; a refresh that is skipped never
+   touches it, and the page pool stays on disk where the title put it.
