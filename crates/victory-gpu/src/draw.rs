@@ -327,6 +327,9 @@ fn mesh_kept(pipeline: usize) -> bool {
 
 /// Draws recorded on the host GPU since the last frame line.
 static DRAWN: AtomicU64 = AtomicU64::new(0);
+/// Indirect records with no arguments that `VICTORY_SKIP_EMPTY_INDIRECT`
+/// kept off the card.
+static EMPTY_SKIPPED: AtomicU64 = AtomicU64::new(0);
 
 /// Draws run on the host so far.
 pub(crate) fn drawn() -> u64 {
@@ -3029,6 +3032,13 @@ impl State {
                 kind == DISPATCH,
             )
         });
+        // An empty record asks for no work: see `skip_empty_records`.
+        if skip_empty_records() && arguments_are_empty(arguments as *const u8) {
+            crate::indirect::done(list, &bounded);
+            EMPTY_SKIPPED.fetch_add(1, Ordering::Relaxed);
+            tracing::debug!(kind, at = ?arguments, "an indirect record with no arguments was not executed");
+            return true;
+        }
         if kind == MESH {
             self.mesh_scissor(list, true);
         }
@@ -3055,6 +3065,30 @@ impl State {
         }
         true
     }
+}
+
+/// `VICTORY_SKIP_EMPTY_INDIRECT=1` (off by default): an indirect record
+/// whose argument dwords are all zero asks for no work, and the world's
+/// deaths land on one (`args [0, 0, 0, 0, 0]`, 2026-11-25 12:00). Skipping
+/// such a call is what tells "the card faults on the empty record" from
+/// "the empty record is not the fault", because a record of zeros executes
+/// nothing anyway. Off by default so the runs that measure the world keep
+/// their shape.
+fn skip_empty_records() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| {
+        std::env::var_os("VICTORY_SKIP_EMPTY_INDIRECT").is_some_and(|v| v != "0")
+    })
+}
+
+/// The five argument dwords at `arguments` are all zero. A record that
+/// cannot be read is not an empty one.
+fn arguments_are_empty(arguments: *const u8) -> bool {
+    let mut bytes = [0u8; 20];
+    if !crate::host::read_into(arguments, &mut bytes) {
+        return false;
+    }
+    bytes.iter().all(|&b| b == 0)
 }
 
 /// The host command signature for one argument of `kind` with records

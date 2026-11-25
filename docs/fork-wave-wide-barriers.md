@@ -903,6 +903,43 @@ Two probes follow from that, in this order:
 2. **`VICTORY_CAPTURE` at frames 512 and 1024**: if the picture is already wrong a few
    frames before the death, the bad submission is older than the removal.
 
+### 2026-11-25 12:25: the death comes with a burst of empty indirect records, and skipping them keeps the device
+
+`draw.rs` now has `VICTORY_SKIP_EMPTY_INDIRECT=1` (off by default): an indirect op whose
+five argument dwords read as zeros is not issued, because a record of zeros executes
+nothing anyway. Nothing else changes, so the switch isolates one question: is the empty
+record the call the card dies on?
+
+Same choreography, seeded folder, WARP, `VICTORY_KEYS` every 15 s:
+
+```
+04:06:19  pack\story000_restofworld\story000_restofworld.rpf      (the world)
+04:07:57  743 indirect records with no arguments were not executed
+04:07:58  316 …
+04:07:59  105 …                                                   (1,164 in three seconds)
+04:08:31  still alive; killed here
+```
+
+**No device removal**, `frame=1024` printed, and the 1,164 empty records land **98 s into
+the world** — inside the 82–120 s window in which five of the seven earlier runs died
+(yesterday's arms: 82, 96, 98, 120 s; the three that were killed under 1,024 frames had
+not reached it). This is the first arm that has been past that window with the same
+build, the same data folder and no other switch set.
+
+What it does not settle:
+
+- The skipped records are `kind=2` (dispatch) and `kind=0` (draw), while the op named at
+  12:00 was an indirect **mesh** (`kind=10`). Either the world issues both shapes in the
+  same burst (the mesh's note prints before the skip, since the skip is checked after the
+  note) or the mesh was a bystander. Counting the kinds the skip keeps off the card is
+  the next measurement, and the switch already counts them.
+- One arm is not a result. A longer run of the same arm (and one with the switch off, to
+  the same length) is what turns this into one.
+
+If it holds, the change itself is cheap: an indirect record whose arguments are all zero
+asks for no work, so not issuing it is not a shortcut but the same command — and it
+removes whatever the empty `ExecuteIndirect` does to WARP.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
