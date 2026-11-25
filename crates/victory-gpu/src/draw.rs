@@ -1375,11 +1375,30 @@ impl State {
             .entry(std::ptr::from_ref(host) as usize)
             .or_insert_with(|| (0, Ranges::new()));
         let changed = host.buffer_changes();
-        let slots = if *passes % 16 == 0 {
+        // The whole heap once every 16 passes, a sixteenth of it per pass: a
+        // view of a released resource goes stale without a write, and a slot
+        // written before its memory had a host copy is only made then, but
+        // walking all 104,139 slots in one pass is what the software adapter
+        // went during (2026-11-25 09:14, 82 s into the world: a submission of
+        // 7 lists, `the host device went while buffer views of the heap were
+        // made`). `VICTORY_HEAP_SWEEP=1` restores the whole heap at once.
+        static SLICE: AtomicU64 = AtomicU64::new(0);
+        let whole = std::env::var("VICTORY_HEAP_SWEEP").is_ok_and(|v| v != "0");
+        let slots = if *passes % 16 == 0 && whole {
             ranges.clear();
             host.buffer_slots()
         } else {
-            changed
+            let mut slots = changed;
+            if !whole {
+                let all = host.buffer_slots();
+                let each = all.len().div_ceil(16).max(1);
+                let k = SLICE.fetch_add(1, Ordering::Relaxed) as usize % 16;
+                let from = k * each;
+                if from < all.len() {
+                    slots.extend_from_slice(&all[from..(from + each).min(all.len())]);
+                }
+            }
+            slots
         };
         *passes += 1;
         // Whether the device was there before the pass: a view that removes

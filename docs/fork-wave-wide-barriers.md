@@ -757,6 +757,65 @@ copy-back that names it), logged with each present 鈥?then "the same picture
 again" becomes "this picture is three generations old", and the step that
 skips two of three turns is named.
 
+### 2026-11-25 10:05: c96b4f2 merged — and the default is now the relayed present
+
+`fxceless/victory-fork`'s `main` moved a803c87 → **c96b4f2** (the fork owner's own
+commit, Nov 24 20:22 -0500): the depth bounds test of #82 made from a
+`DEPTH_STENCIL1` stream under its own library name with the title's
+`OMSetDepthBounds` reaching the host list, faster defaults (stage-2 copy-back, wide
+copy-back, card copies from 1 MiB, 256 lists in the air — "about 230 ms a frame
+where it was about 400"), textures picked by index uploaded while loading and before
+the decoration bake, and placed textures keyed without their description's filler
+words. Merged here without a conflict; `victory-gpu` 114 passed, `victory-hle` 101,
+`victory-shader` 215.
+
+**The merge changes what "default" means, and the section above is where it matters.**
+`shadow::relay()` at 17d0311 was `VICTORY_RELAY` set to 1 or 2; c96b4f2 makes it
+**on unless `VICTORY_RELAY=0`**, so `late_stage()` answers 3 with nothing set. Run on
+WARP with `VICTORY_PRESENT_TRACE=1`, merged tree, no environment at all:
+
+| arm | presents | copy sent ahead | `behind` at present |
+|---|---|---|---|
+| merged tree, defaults | 309 | **309 (every one)** | 1–8, never 0 |
+| 17d0311 (the 09:06 table's "default") | 685 | 0 | 0 every time |
+
+So the 09:06 table's *default* arm is now the relay arm, and its `VICTORY_RELAY=1`
+arm is the default. Anyone re-taking the animation measurements on this tree has to
+use `VICTORY_RELAY=0` as the unrelayed arm, or every arm will be relayed. The
+`behind` spread is wider too (1–8 rather than 1–2): c96b4f2 also raises the lists in
+the air.
+
+### The heap-buffer sweep is not what the world dies on
+
+Four seeded WARP runs of the world (a `settings.xml` in the data folder, `Enter`
+every 15 s, no setup pages) agree on where the flow goes and not on when the device
+goes:
+
+| run | tree | came up in the world | lost the device |
+|---|---|---|---|
+| seed2 | 54894e1 | 01:13:11 | **82 s later**, `while buffer views of the heap were made` |
+| seed3 | +c96b4f2 | 01:48:58 | **181 s later**, `after 1 submissions sent ahead of 1 lists` |
+| seed4 | +c96b4f2, sliced sweep | 01:55:21 | never in 107 s |
+| sweepA | +c96b4f2, sliced sweep | 02:00:43 | **96 s later** |
+| sweepB | +c96b4f2, whole sweep (`VICTORY_HEAP_SWEEP=1`) | 02:04:28 | never in 94 s |
+
+The heap pass walked all 104,139 slots in one submission and that is what seed2 died
+inside, so it was the obvious suspect. Slicing it (a sixteenth of the heap a pass,
+`VICTORY_HEAP_SWEEP=1` restores the whole heap at once, the slice is the same work
+spread over 16 frames) does not move the death: 96 s sliced against 94 s whole, both
+inside the 82–181 s spread of the runs that were not touching it. So the burst is a
+1,484 ms stall, not the removal, and at 0.7–1.8 fps the device goes after 100–300
+world frames whatever the sweep does.
+
+What the death does say, every time: `after 1 submissions sent ahead
+(VICTORY_RELAY=1) of 1 lists`, then `no host list for a state prelude` and
+`no shared buffer … (0x887A0005) size=4194304`. seed3's line 246 ms before it is a
+sweep letting go of **159 host copies of textures the title fills (80,064 KiB)**, each
+held by its title texture alone. That is the next thing to test, not a conclusion.
+
+`VICTORY_HEAP_SWEEP=1` is the switch this section adds; the world draws at 0.7–1.8 fps
+on WARP in all five runs.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
