@@ -58,7 +58,7 @@ const KEYBOARD: usize = PADS + 1;
 const DEVICES: usize = PADS + 2;
 
 /// Readings kept per device for next/previous lookups.
-const HISTORY: usize = 32;
+const HISTORY: usize = 256;
 const POLL: Duration = Duration::from_millis(8);
 
 /// `VICTORY_PAD_TRACE=1`: once a second, how many scripted keys this poll put
