@@ -1129,6 +1129,45 @@ path is small and bounded — take the two pixel shaders, run them with `VICTORY
 see which instruction reads the descriptor; the second is the same shape and probably falls with
 it.
 
+### 2026-11-25 15:55: the refused instruction is a dynamic `s_load_dwordx8` of a descriptor's own dwords
+
+`DESC-WHY` is no longer behind a switch (this refusal is met once per shader, and two pixel
+shaders of the world die on that line), so a card run answers the 15:10 question by itself.
+Same choreography, card, 260 s, no removal:
+
+```
+07:51:41  story000_restofworld.rpf
+07:52:28  pixel 2fd01fca16993001 does not translate
+07:52:29  pixel 6b6db9f1a526daeb does not translate
+DESC-WHY 0x1c5c s_load_dwordx8 scalar=Some(Address { param: 288, offset: 0, dynamic: Some(Value(8559)) }) lane_copied=false
+DESC-WHY 0x1d8c s_load_dwordx8 scalar=Some(Address { param: 288, offset: 0, dynamic: Some(Value(8800)) }) lane_copied=false
+```
+
+So the instruction is **`s_load_dwordx8`** — 32 bytes, exactly a console descriptor's size — at two
+sites in each pixel shader, and its address is `param 288 + 0` with a **runtime** value in it
+(`dynamic: Some(Value(8559))`, `Value(8800)`): the shader indexes a table of descriptors with a
+number it only knows at run time, and consumes the eight dwords as numbers.
+
+That is why the lowering stops. Everything it knows how to do at that line is *static*: a sampler's
+dwords (dead on that path, 5670-5679), a buffer view's address (5686-5699). A dynamic descriptor
+read needs the descriptor's dwords at run time, and the two shapes available are:
+
+1. **Materialise the table.** The descriptor heap's raw dwords are already mirrored here (that is
+   where `descriptor::view` gets its fields from). A buffer holding the host's copy of the table,
+   indexed by the same value, would let the load become a plain read — but the value is a *console*
+   index into a *console* layout, so the table has to be laid out in the console's format, not the
+   host's, for the eight dwords the shader then reads to mean what it means.
+2. **An interpreter step.** A small pass that turns such reads into host values before the shader
+   runs, which is the same work as (1) with the layout question answered on the CPU.
+
+Either way the question to answer first is what those eight dwords mean to the shader: whether it
+reads a format, an address, or a stride out of them decides whether a table in the console's layout
+is enough. `VICTORY_CAPTURE` of a frame would not answer it; a disassembly of the two sites would,
+and the shader is in the dump's `shaders.rpf` as `f133…`-style hashes name them.
+
+The two compute refusals are separate and unchanged: `a lane mask exchanged where not every lane
+runs` (`lower.rs` 3111, 3757) and `a descriptor's address or format read as data` (5600).
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
