@@ -1056,6 +1056,43 @@ What follows: the death line should carry the layer's own holdings — the bytes
 textures, host buffers and staging we keep alive — because those are what a WARP budget
 would be spent on, and the frame line's "our own allocations" cannot see them.
 
+### 2026-11-25 14:20: the card runs the world for 268 s where WARP dies at 100
+
+The one arm nobody had taken: the same seeded folder, the same `Enter` every 15 s, but on the
+**card** (RTX 4080 SUPER, `VICTORY_D3D12_DRED=1`, everything else default), 300 s:
+
+```
+06:17:56  run starts; 30.0 fps, 33.3 ms a frame on the menus
+06:18:27  pack\story000_restofworld\story000_restofworld.rpf opens
+06:22:52  0.4-0.7 fps in the world (268 s in), 792 host lists, own allocations 1111 MB
+06:22:55  killed here
+```
+
+**No device removal, no `ERROR`, no trap** — 268 s of the world, where the software adapter has
+not survived 100 s in any of eight runs. The machine stayed responsive (the shell answering
+after the kill was checked before anything else).
+
+The memory line at the end, on the card:
+
+```
+792 host lists alive, scratch 212 chunks 128 MB (93 spare);
+windows outside buffers: 1980 MB of pages ever copied, 719 shown by descriptor slots 3000 MB,
+730 held by lists or the pass over the heap 3048 MB, 504 asked for without a length 2016 MB;
+our own allocations: 1111 MB in 1,059,593 blocks
+```
+
+So the world's copies on the card are the same order as on WARP (gigabytes of windows, a
+thousand-million Rust blocks of bookkeeping), and it is not memory that decides — the card has
+16 GB and does not need to care; WARP, at 18.6 GB resident and 21.6 GB committed against a
+63.8 GB commit limit, dies with a 4 MB allocation refused.
+
+That settles what the last week of switches could not: **the removal is a budget WARP enforces,
+not a command this layer issues.** The world on the card is now the path, and it is the first
+time it has been taken past the menus at all. What the card does not yet show is the world
+*playing*: 0.4-0.7 fps is streaming, not a frame loop, so the next question on this path is why
+the card is that slow in the world (33 ms a frame on the menus, 1.4-2.5 s in the world) and
+whether it ever leaves streaming.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
