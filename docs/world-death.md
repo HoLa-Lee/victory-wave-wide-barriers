@@ -897,3 +897,32 @@ slot=97069 address=0x78af58000 bytes=352256 frames_after_…
 change, the layer notices later (its index-picked queue is re-checked) and uploads again. That is
 the staleness the switch trades for the 26× on the texture path, and it is visible in the log
 rather than silent — worth knowing when someone wonders why textures are uploaded twice.
+
+## The title does commit saves — (d) is not about a missing save
+
+A 600 s card run with the HLE modules at debug (`xgamesave`, `xuser`, `xsystem`, `xpackage`,
+`xgame`, `storage`) shows the title using XGameSave properly:
+
+```
+xgamesave: create_container container=Player
+xgamesave: create_update  container=Player
+xgamesave: write_blob blob=Save Game Header size=296
+xgamesave: write_blob blob=Save Game Data   size=2012
+xgamesave: create_container container=SettingsProfileSettings
+xgamesave: write_blob blob=Save Game Data   size=7344
+… and later, a real one: write_blob blob=Save Game Data size=242992
+```
+
+and the data folder afterwards holds the committed versions:
+
+```
+7952987A\saves\…\Player~333dc56ddffd8ea0\v4\{0 (2012), 1 (296), manifest (58)}
+7952987A\saves\…\SARC0015~f3ad35e1a05a7da0\v1\{0 (242,992), 1 (296), manifest (62)}
+7952987A\saves\…\SettingsProfileSettings~0b4e25fca06268d0\v1\{0 (7,344), 1 (296), manifest (92)}
+```
+
+**So the saves are written, versioned and on disk — four versions of the player container, a
+level save of 242 KB, and the profile settings.** Starting the game again with those saves in
+place (a second 300 s run) still loads the story and still comes back to the legal notices, with
+the story's key art captured at frame 2048 (4,184,044 bytes) and the later screen at 2400
+(1,623,261). Whatever brings the flow back is therefore not a missing or failed save.
