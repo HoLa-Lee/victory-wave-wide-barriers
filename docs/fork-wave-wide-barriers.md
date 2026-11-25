@@ -1396,3 +1396,27 @@ garbage and the card fault.
 
 Note also that the removal line still says `breadcrumbs (done/count, list) []` with DRED on, so
 DRED's breadcrumbs remain empty on this host even when the death is reproduced.
+
+### 2026-11-25 12:00: the dying indirect record's arguments are all zero
+
+The same choreography, 250 s, WARP, DRED, with the argument dwords now read at record time
+(`draw.rs`'s `note_op` for an indirect op reads the five words from the record's address):
+
+```
+host GPU device removed … of 8 lists; breadcrumbs (done/count, list) [];
+list 5 of 8, of its 135: indirect kind 10 max 1 at 0xd49401d20 args [0, 0, 0, 0, 0]
+  [mesh 8563c39d693b36d0] targets [] depth Some("0x28164ca13b0 2560x1440 f19") …
+```
+
+**The record the card dies on is an indirect mesh whose five argument words are all zero.** Two
+runs earlier the same shape appeared at command 35 of the same list with a different argument
+address (`0xd49401e00`), so the record is not one fixed buffer but one the title keeps building;
+what does not change is that the dying op is an indirect mesh and (now measured) its arguments
+are empty.
+
+A zero-group mesh dispatch should execute nothing, so either the zero arguments are a symptom of
+a record the title had not written yet when the list ran (and the fault is elsewhere in the same
+list), or `ExecuteIndirect` with a mesh signature, `max 1`, zero counts and this layer's bounded
+scratch buffer is itself the invalid call. The next look is `indirect.rs`'s mesh branch and what
+it hands `ExecuteIndirect` when the clamp produces no records at all — a path that until now has
+been reached only by a title that writes its arguments first.

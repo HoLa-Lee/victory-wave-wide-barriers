@@ -2657,7 +2657,25 @@ impl State {
         }
         #[cfg(feature = "diagnostics")]
         list.note_op(|| {
-            self.op_text(format!("indirect kind {kind} max {max} at {arguments:#x}"), kind == DISPATCH)
+            // The five argument dwords as the record was issued: a record the
+            // title never wrote (freed, or not yet filled) reads as garbage
+            // and the card faults on it, so the numbers are worth the read.
+            let arguments_text = {
+                let mut bytes = [0u8; 20];
+                if crate::host::read_into(arguments as *const u8, &mut bytes) {
+                    let mut words = [0u32; 5];
+                    for (word, chunk) in words.iter_mut().zip(bytes.chunks_exact(4)) {
+                        *word = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    }
+                    format!(" args {words:?}")
+                } else {
+                    " args unreadable".to_owned()
+                }
+            };
+            self.op_text(
+                format!("indirect kind {kind} max {max} at {arguments:#x}{arguments_text}"),
+                kind == DISPATCH,
+            )
         });
         if kind == MESH {
             self.mesh_scissor(list, true);
