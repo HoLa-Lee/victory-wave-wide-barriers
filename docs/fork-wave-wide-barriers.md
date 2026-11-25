@@ -1035,3 +1035,15 @@ would be unmistakable, not the loading screen's 30 fps pulse.
 present digest, source/title pointers, texture refresh generations, buffer refresh counters)
 find no path in this layer that re-delivers an older picture, and the math of the remaining
 candidate — the title's own three-phase glow — fits every number.**
+
+### 2026-11-25 10:40: the whole workspace is green after the fork's merge
+
+`cargo test --workspace --lib --profile diag --features diagnostics` on this branch, after
+`4f75cbf` brought fxceless's `c96b4f2` in:
+
+```
+11 + 24 + 3 + 121 + 101 + 25 + 7 + 4 + 215 = 511 passed, 0 failed, 8 ignored
+```
+
+and `cargo build --profile diag -p victory --features diagnostics` clean. That is the state
+the 31 unpushed commits sit on.
