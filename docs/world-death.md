@@ -192,3 +192,28 @@ which branch of `ALERT_ERROR_SUPPORT` ran, and there are only so many "support" 
 has (`ALERT_ERROR_SUPPORT_0x…` with a numeric class). Reading the 13 obfuscated bytes as data —
 0x3b 0x45 0x4b 0x17 0x44 0x68 0x5d 0x1b 0x4f 0x66 0x65 0xff 0x01, each plus 0x0c — gives a
 candidate id and, with it, the feature the title wants.
+
+## The two failure modes are not the same failure
+
+Counting `0x8007000E` (`E_OUTOFMEMORY`, "not enough memory resources") in every arm:
+
+| arm | `E_OUTOFMEMORY` lines | outcome |
+|---|---|---|
+| `keys2`, `args`, `argsub`, `around`, `post310` (default switches) | **0** | **device removed** |
+| `skipind`, `copy_mode=none` | **3,827–3,843** | **the title's trap** |
+
+So the trap is preceded by thousands of failed 256 KiB upload allocations, and **no arm that
+ended in a device removal logged a single one**. The trap is therefore a *second* bug: the
+switches that suppress work (`VICTORY_SKIP_EMPTY_INDIRECT`, `VICTORY_COPY_MODE=none`) let
+something in this layer grow until the host refuses allocations, the title's render path starts
+failing (`host pipeline refused 0x80070057`), and it takes its `ALERT_ERROR_SUPPORT` trap.
+
+That corrects the last section's reading: the trap is not the world's death seen from another
+angle — it is what those switches cause. The world's own death remains the **device removal with
+zero `E_OUTOFMEMORY`**, an empty DRED report and a silent validation layer, which is why the
+"resource running out" hypothesis needed this count before it could be believed.
+
+Two things follow. Whoever pursues the memory angle should first check which arm their numbers
+came from — the million small blocks the other session measured may be the same artefact. And
+the world's removal still has no explanation that fits: no API error, no page fault reported, no
+allocation failure, and a moment that repeats to within sixteen seconds.
