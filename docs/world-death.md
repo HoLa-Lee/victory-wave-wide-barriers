@@ -775,3 +775,25 @@ pages are set, and a run list built once per layout rather than per texture) is 
 So the honest ordering for running the story today: stride alone 145–522 ms at the light phase,
 stride plus bitmap-detiling 400–640 ms with fresh content, range-list detiling 1,000 ms. All three
 render the key art correctly; only the first two are worth keeping.
+
+## The configurations, compared on story-phase frames only
+
+Medians over frames with 500 draws or more (the menus log tens of draws and would drown the
+story), from the logs the runs already left behind (`tools/frame_stats.ps1`):
+
+| run | switches | frames | median frame | textures ms | textures MB | draws | textures ms per 1,000 draws |
+|---|---|---|---|---|---|---|---|
+| `cardworld5` | none | 17 | 3,211 ms | 2,655 | 372 | 4,198 | 632 |
+| `cardrs4` | read set | 17 | 2,399 ms | 1,581 | 302 | 4,188 | 377 |
+| `cardbytes` | sample skip | 21 | 1,211 ms | 553 | 304 | 4,058 | 136 |
+| `cardworld10` | sample skip + stride | 43 | **777 ms** | **100** | **10** | 2,186 | **46** |
+| `cardworld9` | sample skip + stride | 23 | 1,242 ms | 98 | 18 | 3,128 | 31 |
+| `carddw3` | + written-only (page bitmap) | 21 | 927 ms | 248 | 9 | 2,796 | 89 |
+| `carddw4` | + subresource pruning | 21 | 1,084 ms | 158 | 10 | 2,630 | 60 |
+
+Read straight off: the sample skip alone takes textures from 2,655 ms to 553 ms (4.8×) and the
+stride takes it to 100 ms (26×). The written-only detile does what it promised on bytes — **9–10 MB
+a frame against 10–18 with the stride alone** — but it does not beat the stride on time, because
+the walk it must run costs about as much as the detiling it saves. **The stride plus the sample
+skip is the configuration to run the story with today**; the written-only path is the one to keep
+for later, when the walk is cheap enough to make fresh content free.
