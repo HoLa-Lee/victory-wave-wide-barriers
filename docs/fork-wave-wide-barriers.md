@@ -1213,3 +1213,28 @@ grown to **13.43 GB** (from 9.85 GB minutes earlier) — memory is worth watchin
 about half an hour of durability is supported by these two reads. The durable runs this report
 can vouch for remain the 100 s card run (30 fps, 0 removals) and the 185 s WARP run (4.4–21.7
 fps, 0 removals).
+
+### 2026-11-25 11:20: on the card the flow stops at the legal notices, whatever the keys do
+
+Four runs on the RTX 4080 SUPER with the same forty-second recipe, differing only in the key
+script:
+
+| run | keys | length | world packs | story packs | device removals |
+|---|---|---|---|---|---|
+| `cardworld` | Enter at 15/20/25/30/40 s | 100 s | 8 | 0 | 0 |
+| `cardstory` | Enter every 5 s, 15–120 s | 150 s | 8 | 0 | 0 |
+| `cardstory2` | Down,Down,Enter every 5 s, 100–195 s | 225 s | 8 | 0 | 0 |
+| `cardstory3` | **Enter every 2 s, 5–235 s** | 245 s | 8 | 0 | 0 |
+
+All four hold **30.0 fps at 0.0 ms of GPU**, lose no device, and never leave the menus. The
+frame captured at 117 s in `cardstory` is the **LEGAL NOTICES** page with the cursor on
+`Copyright` and `Next` drawn — the same page the WARP runs walk past with `Down, Down, Enter`.
+
+So the card's world phase is reachable as far as the loading packs and no further *because of
+input*, not rendering: the identical recipe reaches `story000` on WARP in 40 seconds. Whether the
+stand-in pad's buttons reach the title at all on the card is the next thing to instrument — a
+line per second naming the buttons the pad reports would settle it in one run, and until then no
+card measurement past the menus means anything.
+
+What is *not* in doubt: 100–245 s of the card's world-loading phase at 30 fps with 0.0 ms of GPU
+and no device removal, against 7–18 s to removal on `70564ae` and `644ebeb`.
