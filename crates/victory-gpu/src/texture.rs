@@ -1,4 +1,4 @@
-//! Texture contents the title writes itself (decision 0007, "Texture
+﻿//! Texture contents the title writes itself (decision 0007, "Texture
 //! memory"): streamed pages, layout-library copies, movie frames, glyph
 //! atlases. Such a texture lives in console memory in its tiled layout;
 //! before a submission samples its host copy, the memory is detiled into a
@@ -521,6 +521,29 @@ pub(crate) fn placed_in_host_written(address: u64, desc: &[u32; 14]) {
 /// Whether the host GPU wrote `resource` by a copy or resolve
 /// ([`host_written`]): its host copy cannot be made again from title
 /// memory.
+/// How often a staging's refresh was asked for, how often it actually read
+/// title memory, and how often a submission skipped it because it had
+/// already asked (`Batch::texture_due`) 閳?for `VICTORY_PRESENT_TRACE`, which
+/// prints the three counts beside every present.
+static REFRESH_ASKED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static REFRESH_READ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static REFRESH_SKIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub(crate) fn refresh_counts() -> (u64, u64, u64) {
+    use std::sync::atomic::Ordering::Relaxed;
+    (
+        REFRESH_ASKED.load(Relaxed),
+        REFRESH_READ.load(Relaxed),
+        REFRESH_SKIPPED.load(Relaxed),
+    )
+}
+
+/// A submission did not ask a staging again (it already had, and nothing has
+/// written title memory since).
+pub(crate) fn count_refresh_skipped() {
+    REFRESH_SKIPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub(crate) fn host_wrote(resource: usize) -> bool {
     HOST_WRITTEN
         .lock()
@@ -664,7 +687,11 @@ impl Staging {
     pub(crate) fn refresh(&self) {
         use std::sync::atomic::Ordering::Relaxed;
         let started = std::time::Instant::now();
+        REFRESH_ASKED.fetch_add(1, Relaxed);
         let read = self.refresh_now();
+        if read > 0 {
+            REFRESH_READ.fetch_add(1, Relaxed);
+        }
         let preparing = &crate::host::PREPARING;
         preparing[2].fetch_add(started.elapsed().as_micros() as u64, Relaxed);
         preparing[3].fetch_add(read as u64, Relaxed);

@@ -5272,6 +5272,8 @@ impl HostList {
                 Step::Texture(staging) => {
                     if batch.texture_due(staging) {
                         staging.refresh();
+                    } else {
+                        crate::texture::count_refresh_skipped();
                     }
                     continue;
                 }
@@ -6125,6 +6127,7 @@ impl Host {
                     // the ring is inside the title or in the refresh cadence.
                     source = %format_args!("{:p}", texture.as_raw()),
                     title_at = %format_args!("{:#x}", at),
+                    refresh = %format_args!("{:?}", crate::texture::refresh_counts()),
                     "present"
                 );
             }
