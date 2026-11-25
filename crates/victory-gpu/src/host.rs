@@ -6093,6 +6093,10 @@ impl Host {
                     completed,
                     behind = submitted.saturating_sub(completed),
                     digest = %digest,
+                    // Which host resource this present copied: a ring of them
+                    // shows as three pointers taking turns, one pointer means
+                    // the ring is inside the title or in the refresh cadence.
+                    source = %format_args!("{:p}", texture.as_raw()),
                     "present"
                 );
             }

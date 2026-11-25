@@ -693,6 +693,45 @@ whose refresh landed one, two and three presents ago. Reading `resource.rs`'s
 `host_copy`/`let_go_idle` path for the presented texture, and logging which
 host resource id each present copied, settles which ring it is.
 
+### 2026-11-25 09:47: two host textures take turns, the picture returns every three frames
+
+`VICTORY_PRESENT_TRACE=1` now also logs **which host resource** each present
+copies (`source = texture.as_raw()`). Seeded profile, `Enter` every 15 s, WARP,
+160 s, every present:
+
+```
+distinct sources: 2   (0x…b060 ×1087, 0x…069a0 ×1087)
+f=300 src=A   f=301 src=B   f=302 src=A   f=303 src=B   …   (strict alternation)
+```
+
+So the presented texture is **double buffered** by the title, one present per
+texture, and every one of those presents logs `behind=0`: the copy is complete
+before `Present` in every case. The picture, meanwhile, keeps its three-frame
+cycle (this run, same window):
+
+```
+310 89794D  311 13C50A  312 5E208F
+313 89794D  314 13C50A  315 5E208F
+...
+322 89794D  323 4077E5  324 5E208F
+325 89794D  326 4077E5  327 5E208F
+```
+
+Two periods at once — 2 for the textures, 3 for the pictures, so the pair
+repeats every six frames — and the same picture appears on *both* textures in
+turn (321 and 324 are the same file, from different sources). A new picture
+arrives once per three presents and is then shown twice more.
+
+That is the regression, and it is not the present path (sync, `behind=0`), not
+the ring (two, and both carry the same picture), and not a skipped refresh
+(`0 skipped`). What is left is the **refresh cadence of the presented texture**:
+the same picture being copied on the second and third present of a frame means
+the content the layer hands the back buffer is not the frame the title has just
+finished. The next probe is a counter per host texture — refreshed since its
+last present, yes or no — logged with each present, which turns "same picture
+again" into either "not refreshed" (refresh cadence, fixable in `shadow`) or
+"refreshed, and the title really drew that" (the title's own double buffer).
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
