@@ -732,6 +732,35 @@ last present, yes or no — logged with each present, which turns "same picture
 again" into either "not refreshed" (refresh cadence, fixable in `shadow`) or
 "refreshed, and the title really drew that" (the title's own double buffer).
 
+### 2026-11-25 10:00: the draws advance every frame; the picture advances every third
+
+The queue's own line, same run, gives the draws per presented frame (cumulative,
+so differences over a window are exact): frame 256 → 512 carries 2,466 − 2,203
+draws over 256 frames (≈1 a frame at the loading screen's start) and 512 →
+1,024 carries 7,300 − 2,203 over 512 (≈10 a frame). **The title draws every
+frame.** The picture, meanwhile, repeats with a period of three (section
+above), and each of the two host textures shows all three pictures in turn, so
+the alternation is not what makes it repeat.
+
+The chain a presented picture goes through, and which of its steps can be three
+frames behind:
+
+```
+title draw → copy-back into title memory → Texture::refresh (staging)
+           → host copy upload → present's CopyResource(back, host copy)
+```
+
+`Texture::refresh` is deduped per submission: `Batch::texture_due` (host.rs)
+refreshes a staging at most once until something writes title memory
+(`Batch::title_written` clears the set), and `Texture::refresh_timed` returns 0
+early when the write-watch says the pages did not change. The copy-back of what
+the frame's shaders wrote is the step before both. Three frames is exactly one
+turn of that chain, which is where the next instrument goes: a **content
+generation** counter per host copy, bumped at every fill (and at every
+copy-back that names it), logged with each present — then "the same picture
+again" becomes "this picture is three generations old", and the step that
+skips two of three turns is named.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
