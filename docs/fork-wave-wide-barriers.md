@@ -1010,3 +1010,28 @@ comes back, which is exactly the shape measured.
 Next probe, cheap: log per submission how many buffer refreshes were asked, how many were
 deferred by `stale_under_flights`/`Batch::texture_due`-style dedup, and the age (in
 submissions) of the oldest refresh a list actually read.
+
+### 2026-11-25 10:35: the three "pictures" are three glow phases of the same stars
+
+The hashes that cycle are three *visibly different* images — 30,298, 84,926 and 122,600 bytes —
+so they are not near-identical frames. Looked at, they are the same seven stars with the same
+left-to-right orange→magenta gradient at three glow intensities: `docs/stars-bright.png`
+(frame 208, hash 5E208F) has the heavy bloom, `docs/stars-dim.png` (frame 209, hash 89794D) is
+the dim phase, and the third is between them.
+
+A three-phase glow pulse on a loading screen is exactly the sort of thing a title animates in
+three steps and loops. Which means the measurement of the last four rounds — "130 of 149
+frames show the picture from three back" — may be **the authored loop**, not a replay of old
+frames at all, and none of the plumbing counters disagree: texture refreshes zero, buffer
+refreshes steady at 40 asked / 2 done on every present, both adapters, `behind=0` throughout.
+
+To settle it one would need the title's own animation clock, which this layer does not see.
+What the layer *can* still answer is whether a frame is ever presented twice from the same
+content with different frames in between *at a rate the title cannot have authored* — and for
+that the place to measure is the world's intro, where frames are 60 times longer and a replay
+would be unmistakable, not the loading screen's 30 fps pulse.
+
+**Reported as an honest negative for the plumbing: six instruments (present fence, relay,
+present digest, source/title pointers, texture refresh generations, buffer refresh counters)
+find no path in this layer that re-delivers an older picture, and the math of the remaining
+candidate — the title's own three-phase glow — fits every number.**
