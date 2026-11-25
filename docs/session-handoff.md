@@ -211,3 +211,32 @@ cargo build --profile diag -p victory --features diagnostics
   → **新会话不要再合并一次**；下一步是**验证**：`VICTORY_FAST=1` + `VICTORY_TEXTURE_STAGE_MB=64` + `VICTORY_INDIRECT_GATHER=1` 跑一次卡上，看 4.5 fps 能否往 8–10 fps 靠
 - 冲突解决方式（供理解改动）：`draw.rs` 取了上游的 jump-window 块（我们的"提交时刷新参数"实验无效果）；`host.rs` 保留上游 `present`/`present_now` 拆分并把 present trace 的地址贯穿进去；`Held::Present` 扩成 4 字段；删掉上游已废弃的 `crate::indirect::done`
 - `CLAIMS.md` 仍停在 `sha=5d4c495 / last_comment=7164183778`（13:48 UTC 之后未更新）；我们 14:54 UTC 的两条评论仍未登记
+
+## 14. 验证跑结果（2026-11-26 00:53，合并 `36b1207` 之后）
+
+命令：`VICTORY_FAST=1` + `VICTORY_TEXTURE_STAGE_MB=64` + **`VICTORY_INDIRECT_GATHER=1`**，卡上 700 秒，§6 的键序。
+
+```
+4.2 fps, 239.1 ms（preparing 84.5：copies 55.2 ms 135.9 MB，textures 0.2 ms 0.1 MB；
+  GPU 118.2 ms；回拷 178.3 ms 69.9 MB）4035 draws，丢 267
+4.1 fps, 243.9 ms（copies 63.4 ms 172.6 MB；GPU 126.8 ms；回拷 182.8 ms 66.8 MB）4933 draws
+4.2 fps, 238.5 ms（copies 72.8 ms 170.6 MB；GPU  94.1 ms；回拷 135.2 ms 63.0 MB）5555 draws
+4.2 fps, 239.0 ms（copies 71.6 ms 192.2 MB；GPU 107.7 ms；回拷 183.3 ms 69.4 MB）5645 draws
+```
+
+**结论：`VICTORY_INDIRECT_GATHER=1` 在我们这张卡/这个场景上没有改变帧率**（合并前 4.2–4.7 fps / 211–236 ms，现在 4.1–4.2 fps / 238–244 ms，属于同一区间）。上游报的 10.3 fps 是 RTX 4070 的"第一个房间"，我们这里的 draws 是 **4,035–5,645**，场景更重。
+
+**帧的构成已经换了位置**：
+
+| 项 | 现在 | 之前 |
+|---|---|---|
+| 回拷 | **135–183 ms（63–70 MB）← 最大项** | 125–158 ms |
+| GPU | 94–127 ms | 89–115 ms |
+| copies | 55–73 ms（136–192 MB） | 37–74 ms |
+| textures | **0.1–0.3 ms** | 0.1–0.2 ms |
+
+所以下一处该攻的是 **copy-back**（每帧 60–70 MB 花 135–183 ms，约 2–3 ms/MB，是延迟不是带宽）。上游 `a253706` 的 `VICTORY_DRIVER_WATCH` 能提前 2.7–55 秒预告丢设备，可作为这项工作的工具。
+
+抓帧：`frame-5000.png` = 3,066,463 字节（过场画面，完整）。
+
+**状态**：`story 7 / world 8`，700 秒存活，**0 丢设备 0 陷阱**。
