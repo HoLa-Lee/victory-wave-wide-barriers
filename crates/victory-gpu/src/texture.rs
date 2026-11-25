@@ -60,6 +60,8 @@ pub(crate) struct Staging {
 
 /// What a texture's staging buffer holds: the hash of the memory detiled
 /// (memory not watched), or the write-watch asking it was detiled after.
+const PAGE: usize = 64 * 1024;
+
 #[derive(Default)]
 struct Last {
     hash: Option<blake3::Hash>,
@@ -833,29 +835,40 @@ impl Staging {
                     // named are read out of title memory and only the runs
                     // they cover are detiled — a fifth to a seventh of the
                     // bytes, measured (docs/world-death.md).
-                    let mut ranges: Vec<(usize, usize)> = written
-                        .iter()
-                        .filter_map(|&(at, len)| {
-                            let from = at.saturating_sub(start) as usize;
-                            (from < size && len > 0).then_some((from, (len as usize).min(size - from)))
-                        })
-                        .collect();
-                    ranges.sort_unstable();
-                    let mut merged: Vec<(usize, usize)> = Vec::with_capacity(ranges.len());
-                    for (from, len) in ranges {
-                        match merged.last_mut() {
-                            Some(last) if from <= last.0 + last.1 => {
-                                last.1 = (from + len).max(last.0 + last.1) - last.0;
-                            }
-                            _ => merged.push((from, len)),
+                    // A bitmap of the 64 KiB pages the watch named: the
+                    // predicate below looks up one or two words per run,
+                    // where a range list cost a scan of all of them.
+                    let pages = size.div_ceil(PAGE);
+                    let mut named = vec![0u64; pages.div_ceil(64)];
+                    for (at, len) in written.iter().copied() {
+                        let from = at.saturating_sub(start) as usize;
+                        if from >= size || len == 0 {
+                            continue;
+                        }
+                        let to = (from + len as usize).min(size);
+                        for page in from / PAGE..=(to - 1) / PAGE {
+                            named[page / 64] |= 1 << (page % 64);
                         }
                     }
-                    for &(from, len) in &merged {
+                    // One read per span of set pages.
+                    let mut page = 0usize;
+                    while page < pages {
+                        if named[page / 64] & (1 << (page % 64)) == 0 {
+                            page += 1;
+                            continue;
+                        }
+                        let first = page;
+                        while page + 1 < pages && named[(page + 1) / 64] & (1 << ((page + 1) % 64)) != 0
+                        {
+                            page += 1;
+                        }
+                        let (from, to) = (first * PAGE, ((page + 1) * PAGE).min(size));
                         crate::host::copy_mapped(read[from..].as_mut_ptr(), unsafe {
                             self.memory.add(from)
-                        }, len, false);
+                        }, to - from, false);
+                        page += 1;
                     }
-                    self.detile_where_loaded(read, &merged);
+                    self.detile_where_loaded(read, &named);
                 } else {
                     crate::host::copy_mapped(read.as_mut_ptr(), self.memory, size, false);
                     self.detile(read);
@@ -1036,7 +1049,7 @@ impl Staging {
     /// [`Staging::detile`] for the runs covering `ranges` (byte ranges of the
     /// tiled memory that were read): every other run is already correct in
     /// the staging buffer from the last refresh.
-    fn detile_where_loaded(&self, tiled: &[u8], ranges: &[(usize, usize)]) {
+    fn detile_where_loaded(&self, tiled: &[u8], pages: &[u64]) {
         self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
         for (i, (footprint, &rows)) in self.footprints.iter().zip(&self.rows).enumerate() {
             let (mip, slice) = (i as u32 % self.mips, i as u32 / self.mips);
@@ -1058,11 +1071,12 @@ impl Staging {
                 |t, len| {
                     // `walk` reports offsets into the whole tiled buffer for
                     // the texture; the ranges are the same space.
-                    let (from, to) = (t, t + len);
                     let _ = base;
-                    ranges
-                        .iter()
-                        .any(|&(r, l)| from < r + l && r < to)
+                    let (first, last) = (t / PAGE, (t + len - 1) / PAGE);
+                    (first..=last).any(|page| match pages.get(page / 64) {
+                        Some(word) => word & (1 << (page % 64)) != 0,
+                        None => false,
+                    })
                 },
             );
         }

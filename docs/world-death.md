@@ -754,3 +754,24 @@ The fix is the shape of the check: a 64 KiB page **bitmap** of what the write wa
 size the watch itself uses), a `u64` word looked up per run, and a single read per contiguous span
 of set bits. Until that exists, `VICTORY_DETILE_WRITTEN` stays off and the stride stays the way to
 run the story at 6.5 fps.
+
+## Page bitmap instead of a range list: 1,000 ms becomes 400–640, and the bytes fall 10–70×
+
+`detile_where` now asks a 64 KiB page bitmap (one `u64` word per run, built from the watch's
+ranges) and the copy is one kernel read per span of set pages. Same choreography, stride on:
+
+```
+1.6–2.5 fps, 400.7–640.5 ms (preparing 243.8–568.8: copies 36.3–51.4 ms 101.6–137.7 MB,
+  textures 163.7–500.1 ms 4.1–27.8 MB; GPU 14.9–42.0 ms; copy-back 46.1–55.1 MB), 922–1300 draws
+captures: 3,827,266 and 4,350,951 bytes — the key art, complete
+```
+
+Against the range-list version (1,000 ms) that is 2.5× better, and the number that matters fell
+further than the time: **textures now move 4–28 MB a frame instead of 278–830 MB**. The time that
+remains is the `walk` itself — enumerating every contiguous run of every subresource of every
+refreshed texture, which the bitmap then rejects. Pruning the walk (only the subresources whose
+pages are set, and a run list built once per layout rather than per texture) is what is left.
+
+So the honest ordering for running the story today: stride alone 145–522 ms at the light phase,
+stride plus bitmap-detiling 400–640 ms with fresh content, range-list detiling 1,000 ms. All three
+render the key art correctly; only the first two are worth keeping.
