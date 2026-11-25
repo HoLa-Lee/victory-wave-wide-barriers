@@ -1,4 +1,4 @@
-﻿//! The host GPU: one D3D12 device and direct queue (decision 0007), and a
+//! The host GPU: one D3D12 device and direct queue (decision 0007), and a
 //! window to present on.
 //!
 //! shortcut: every submission is waited for, so CPU and GPU never overlap
@@ -295,11 +295,41 @@ fn submitting(phase: u64, lists: usize) {
     SUBMITTING[0].store(phase, Ordering::Relaxed);
 }
 
+/// The process's own memory: working set and page file now and at their
+/// peaks, in MB. A device that goes with no API error, no allocation
+/// failing where we ask for one and nothing in the validation layer is what
+/// running the machine dry looks like; these are the numbers that either
+/// show that or rule it out.
+pub(crate) fn process_memory() -> String {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+        use windows_sys::Win32::System::Threading::GetCurrentProcess;
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+            ..Default::default()
+        };
+        // SAFETY: a plain query about this process.
+        let ok = unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) };
+        if ok != 0 {
+            return format!(
+                "process memory: working set {} MB (peak {}), page file {} MB (peak {})",
+                counters.WorkingSetSize >> 20,
+                counters.PeakWorkingSetSize >> 20,
+                counters.PagefileUsage >> 20,
+                counters.PeakPagefileUsage >> 20
+            );
+        }
+        "process memory: unreadable".to_owned()
+    }
+    #[cfg(not(windows))]
+    "process memory: not on this host".to_owned()
+}
+
 /// What was going on when the host device went: whether a submission was
 /// on the card, the pipeline library's state and the calls running in it,
 /// and the trail.
-pub(crate) fn removal_context() -> String {
-    use std::fmt::Write;
+pub(crate) fn removal_context() -> String {    use std::fmt::Write;
     let now = now_us();
     let ms = |at: u64| now.saturating_sub(at) as f64 / 1000.0;
     let phase = match SUBMITTING[0].load(Ordering::Relaxed) {
@@ -319,6 +349,11 @@ pub(crate) fn removal_context() -> String {
         FINISHED.load(Ordering::Relaxed),
     );
     let trail = TRAIL.lock().unwrap_or_else(|e| e.into_inner());
+    // The process's own memory, at the moment the device went: a device that
+    // goes with no API error, no allocation failing where we ask and nothing
+    // in the validation layer is what running the machine dry looks like, so
+    // the numbers are worth having next to the reason.
+    let _ = write!(text, "; {}", process_memory());
     let _ = write!(text, "; the last {} things done, newest last:", trail.len());
     for (at, thread, what) in trail.iter() {
         let _ = write!(text, "\n  {:.1} ms before, thread {thread}: {what}", ms(*at));
