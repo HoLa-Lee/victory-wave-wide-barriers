@@ -1093,6 +1093,42 @@ time it has been taken past the menus at all. What the card does not yet show is
 the card is that slow in the world (33 ms a frame on the menus, 1.4-2.5 s in the world) and
 whether it ever leaves streaming.
 
+### 2026-11-25 15:10: the world's missing draws are three shaders, and the three refusals they meet
+
+The card's world frame line says two things at once: it is slow (1.5-2.7 s a frame, then 6.5 fps
+with the round-robin refreshes) and it **drops 550-1,700 draws a frame** ("dropped … without a
+host pipeline (0 being made)"). The drops are not a mystery of quantity: the same run logs
+**exactly four** shaders that do not translate, and each of them takes all of its pipelines'
+draws with it (`pipeline::note_drop` counts them by that reason):
+
+| hash | stage | refusal |
+|---|---|---|
+| `2fd01fca16993001` | pixel | `GFX10 code at 0x51c4: a descriptor read only as data is not supported` |
+| `6b6db9f1a526daeb` | pixel | `GFX10 code at 0x49dc: a descriptor read only as data is not supported` |
+| `f133e35efed2a48a` | compute | `GFX10 code at 0x1eb4: a lane mask exchanged where not every lane runs is not supported` |
+| `ceb5eb68cd99cb07` | compute | `GFX10 code at 0x38: a descriptor's address or format read as data is not supported` |
+
+Where each refusal is raised, in `crates/victory-shader/src/emit/lower.rs`:
+
+- **`a descriptor read only as data`** — line 5710, at the end of the descriptor lowering. The two
+  cases above it are handled: a sampler's dwords read as numbers (the register is dead on that
+  path, 5670-5679) and a buffer view taken only for its address (5686-5699). What is left is a
+  descriptor whose dwords are consumed as plain numbers with no sampler and no view address, and
+  the lowering stops there rather than guessing. `VICTORY_DESC_WHY=1` prints the instruction at
+  the refusal (`DESC-WHY <offset> <name> scalar=… lane_copied=…`), which is what the two pixel
+  shaders need next.
+- **`a descriptor's address or format read as data`** — the same family (`OTHER`, 5600), for the
+  words past the address.
+- **`a lane mask exchanged where not every lane runs`** — 3111 and 3757, in the wave-lane
+  translation: a console lane mask that moves between executes whose lanes disagree cannot be
+  reproduced with the host's wave64.
+
+So the picture the world is missing has a name and a size: two pixel shaders and two compute
+shaders, on a run that otherwise renders 12,000 frames without a removal. The next step on this
+path is small and bounded — take the two pixel shaders, run them with `VICTORY_DESC_WHY=1`, and
+see which instruction reads the descriptor; the second is the same shape and probably falls with
+it.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
