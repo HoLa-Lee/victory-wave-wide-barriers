@@ -111,3 +111,29 @@ Which turns the next step around: the address is the thing to look at. `+0x23cf6
 offset; the crash log already gives the registers (`rax 0x0 rbx 0x0 rcx 0xd0024c348 rdX 0x1 …`),
 and a disassembly of the 32 bytes around it would name the field the title expected and did not
 get — from an HLE call, most likely.
+
+## What is at `+0x23cf683`: a deliberate trap, not a null field
+
+Mapped the crash offset through the cached image's PE headers and read the bytes
+(`victory-image-b99f876b74d4a77f.dll`, `.text`, file offset 0x23cea83):
+
+```
+23cf663: ed 89 c2 e8 e5 62 e4 ff 80 7c 24 34 01 75 11 48
+23cf673: c7 c0 f4 ff ff ff c6 44 04 41 00 48 ff c0 75 f6
+23cf683: c7 04 25 00 00 00 00 21 d4      <- mov dword ptr [0], 0xd421
+```
+
+So the instruction the title dies on is **`mov dword ptr ds:[0], 0xd421`** — a store to absolute
+address zero with the magic `0xd421`. That is a **deliberate trap**: the title decides something
+is unrecoverable and writes a marker where it knows the fault will be taken (the idiom a title
+uses where a console would have printed and stopped). It is not a null field being dereferenced.
+
+The stack it came from says the same: `#0 +0x23cf683 → #1 +0x2215c35 → #2 +0x2215eca →
+KERNEL32 → ntdll`, i.e. a **worker thread** whose entry point is `+0x2215eca`; the trap was reached
+from a call at `+0x23cf655` (`call …` at 0x23cf666 into a helper) inside it. `rax` and `rbx` are
+both zero at the trap, which is consistent with "a call returned null and the caller took its
+error branch".
+
+Next: disassemble the caller `+0x2215c35` and the thread entry `+0x2215eca` — the branch before
+the trap is where the title formats whatever it was unhappy about, and a string reference there
+names the missing thing far more cheaply than another GPU-side run.
