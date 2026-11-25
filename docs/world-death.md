@@ -88,3 +88,26 @@ The story opens at **178 s in all eight**, and the device goes **33–49 s later
 that is not given `VICTORY_SKIP_EMPTY_INDIRECT=1` — a spread of 16 s over six runs. A fault that
 depends on what a frame contains would not be this regular; one that depends on how much has
 accumulated by then would.
+
+## Three different switches, one crash
+
+`VICTORY_COPY_MODE=none` (no per-frame title-memory copies), 330 s, same recipe: story packs open
+**earlier** (150 s, the copies are the wait), **no device removal**, and the title takes the same
+`0xc0000005` at **`+0x23cf683`, writing `0x0`** that both `VICTORY_SKIP_EMPTY_INDIRECT` arms took.
+
+| arm | story | device | title |
+|---|---|---|---|
+| default | 178 s | removed 211–227 s | — |
+| `SKIP_EMPTY_INDIRECT=1` (×2) | 178 s | none | `+0x23cf683` write `0x0` |
+| `COPY_MODE=none` | 150 s | none | `+0x23cf683` write `0x0` |
+
+Three unrelated switches abolish the device removal and land on **the same instruction** in the
+title's own image. That is the shape of a title-side null dereference which, on the default path,
+the GPU reaches first — the card faults on what the title was about to touch, and the removal is
+the symptom rather than the fault.
+
+Which turns the next step around: the address is the thing to look at. `+0x23cf683` in
+`victory-image-b99f876b74d4a77f.dll` (the cached image of the title's executable) is a fixed
+offset; the crash log already gives the registers (`rax 0x0 rbx 0x0 rcx 0xd0024c348 rdX 0x1 …`),
+and a disassembly of the 32 bytes around it would name the field the title expected and did not
+get — from an HLE call, most likely.
