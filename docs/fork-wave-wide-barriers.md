@@ -570,6 +570,33 @@ one line lists 104,139 heap slots, the whole heap is walked in one go, and the
 software adapter goes during it. A run that wants the world on the card has to be
 taken the same way — a seeded folder and `Enter`, no setup pages.
 
+### 2026-11-25 09:20: the swap chain never shows the animation, so the present is not where it goes back
+
+Two measurements, WARP, this build, fresh data folder, no switches:
+
+- **852 presents, 2 distinct pictures.** With `VICTORY_PRESENT_TRACE=1` every
+  present logs a digest of the probe grid (`capture::digest`): 850 of the 852
+  are the same value as their neighbour, and the whole run holds two values.
+- **99 captured frames, 2 distinct files.** `VICTORY_CAPTURE` with
+  `VICTORY_CAPTURE_FRAMES=200..560` step 4: frames 1–128 are one flat colour
+  (6,121 bytes each) and every frame from 200 to 560 is the *same* file
+  (39,992 bytes). Hashing them shows no second picture in that window at all.
+
+So in the first 560 presented frames the swap chain holds two pictures, and
+neither is an animation. Whatever the reported frame regression belongs to, it
+is not the picture `present()` copies into the back buffer: there is nothing
+moving there to go back. That also means `late_free_present()` cannot be its
+cause, even though the path exists and is measurable
+(see the section above: `VICTORY_RELAY=1` presents one submission behind every
+time, and `VICTORY_PRESENT_FENCE=1` removes that at no cost here).
+
+The next question is therefore *which surface the animation is drawn on*. This
+engine has exactly one swap chain of ours (`Host::presenter`, host.rs:6135) and
+no DXGI swap-chain HLE, so either the animation is presented by a path this
+tree does not see at all, or it happens in frames the instruments never sample
+(a run with `VICTORY_CAPTURE_FRAMES` naming *every* frame of the first three
+seconds would settle that: 90 files, one hash each).
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
