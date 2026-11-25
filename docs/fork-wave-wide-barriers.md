@@ -1333,3 +1333,25 @@ that could have explained it (focus, delivery, pad polling, hold length) are eac
 ruled out. Anything measured on the card past the menus should be treated as unreachable until
 that is solved, and the world work this report did — the 40-second recipe, the story packs, the
 1.6 fps cost — was all on WARP.
+
+### 2026-11-25 11:45: three more attempts at the world's death, none reached the phase
+
+The other session's runs die in the *story* phase after 80–180 s. This session could not get
+there again in three tries:
+
+| run | keys | length | world packs | story packs | removal |
+|---|---|---|---|---|---|
+| `death` | Enter 15–30 s, `VICTORY_D3D12_DRED=1 VICTORY_D3D12_DEBUG=1` | 210 s | 8 | 0 | none |
+| `death2` | Enter every 5 s, 15–120 s, DRED on | 230 s | 8 | 0 | none |
+| `nokeys` | **none** | 200 s | **0** | 0 | none |
+
+And `VICTORY_D3D12_DEBUG=1` still says `no D3D12 debug layer (0x887A002D)` — this machine has no
+SDK debug layer, so the failure text's own suggestion ("enable the D3D debug layer") cannot be
+followed here without installing it. `VICTORY_D3D12_DRED=1` is not enough on its own to show
+anything: it only matters when a removal happens, and none did in these runs.
+
+So the story phase needs a key choreography this session does not have written down: `world=8`
+means the loading packs opened, `story=0` means the menus were never finished, and no keys at
+all leaves even the loading packs unopened (`world=0`, 21 fps at the menus). Whoever next runs
+it should note the exact `VICTORY_KEYS` that reaches `pack\story000\story000.rpf` — that string is
+the missing piece, and without it the world's 80–180 s death cannot be reproduced on demand.
