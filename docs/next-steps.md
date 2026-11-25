@@ -51,3 +51,17 @@ Written 2026-11-25 15:05 after the card's story was reached and ran for seven mi
 
 A change is worth keeping when the frame's `preparing` falls and the capture still renders the
 story's key art (frame ~2048 is a good check: the "I Run This Town" collage, 4.2 MB as a capture).
+
+## Update, 15:55: what the read set turned out to be worth
+
+The read set is correct now (keyed by both the view's address and the staging's memory pointer,
+`VICTORY_REFRESH_READ_SET`) and it saves little: with only the read textures refreshed the frame
+still spends 1.9-2.1 s in textures at 3,392-4,768 draws, because the frame's draws genuinely read
+most of the twenty-odd thousand. **The stride is what makes the story run** (6.5 fps), at the price
+of up to eight frames of staleness.
+
+So step 1 below is superseded by a better one, measured before it is attempted: the write watch
+names **13-23 % of the bytes a whole detile moves** (`named=24036172 whole=105238272 ratio=0.228`),
+so detiling only the named blocks is a **4-8x** saving with no staleness. That needs the tiled
+layout to detile a block range (`layout.detile` takes a whole subresource today); everything else
+- the ranges, the counters, the gate - is already in `Staging::refresh_timed`.
