@@ -377,6 +377,42 @@ flag can only be dropped together with the views that need it — the RTV/UAV
 creation refusing by name, or a supported format's twin — and that is the next
 change, not this one.
 
+### Upstream moved 241 commits; the card still loses the device there, and ours does not
+
+2026-11-25 08:11: `Marvisak/VIctory` is at `644ebeb` (`70564ae` + 241 commits,
+pushed 00:09Z), and the merges settle two of the things this report listed as
+open: `3827767 GPU: make tables past a capped host view heap afresh` (the
+1,000,000-slot cap, with the title's per-frame table ring in the top slots
+named as the thing that hung the card) and `8c26061 GPU: the world stays up`.
+Both are already in `2119b0e`, which is where this branch sits. What upstream
+has that this branch does not is `7216ab7 HLE: implement the RPC runtime's GUID
+calls` and `ff15f98 #636 hle/allow-rpcrt4` — the `refused dll="rpcrt4.dll"`
+line every run of this tree prints at start-up.
+
+Run on this card, same dump, same menus, fresh data folder, `VICTORY_D3D12_DRED=1`:
+
+| tree | rate | device | log |
+|---|---|---|---|
+| `644ebeb` upstream | **0.1 fps at frame 2 (6,454 ms preparing), then 33 ms frames** | removed ~18 s in, reason `0x887A0001`, breadcrumbs `[]` | 310,967 lines, of which **310,720** are `title slot past the host heap` |
+| `2119b0e` + this branch | 30 fps from the first frame | none in 40 s | 521 lines, none of them that warning |
+
+Two things follow, and the first one corrects this report's own table above.
+
+**The 0.1 fps is one submission, not the rendering.** The card spends 6,454 ms
+preparing frame 2 and 3.0 ms on the GPU, then presents frames 4, 8, 16, 32 and
+64 at 33 ms each. The slow submission is the one that prints those 310,720
+warnings (one per slot past the host heap, `3827767`'s diagnostic, each a new
+maximum so each prints once): 310,720 × ~21 µs = 6.5 s. WARP prints none — its
+heap holds the title's whole 1,245,184 slots — which is why the same tree looks
+fast there. So "the card is 150x slower than the software adapter" is a
+host-side one-off in a submission, not the card's throughput.
+
+**Upstream still loses the device here and this branch does not**, which is the
+same statement as before, one upstream head later: `e9765a7` (in `2119b0e`, and
+now in `644ebeb`) fixed it for 3080-class runs, and on this 4080 SUPER the
+`644ebeb` build still dies ~18 s in with `0x887A0001` and no breadcrumbs while
+this branch runs the same 40 s cleanly.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
