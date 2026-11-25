@@ -986,6 +986,45 @@ The control arm is worth one more sentence of its own: `skipOffLong` died with a
 inside the software adapter itself (`d3d10warp.dll+0x2fa0e8`, `+0xa5d34`, `+0xa5b18`), so
 the removal happens in WARP's own code, which agrees with 12:00's "not an API misuse".
 
+### 2026-11-25 12:50: a run that dies with no indirect op at all, and a million host allocations
+
+The same choreography again (seeded folder, WARP, `VICTORY_KEYS`, nothing else set), 300 s:
+
+```
+04:48:10  story000_restofworld.rpf opens
+04:50:00  host GPU device removed after 1 submissions sent ahead of 8 lists
+```
+
+**No indirect op was recorded in that run at all** (`indirect kind` lines: 0), and the last
+thing the trace says before the removal is a shader reading a 3-D texture the title fills
+(`a shader reads a texture the title fills … DIMENSION(3)`), not a mesh dispatch. So the
+12:00 note's indirect mesh is *a* place the world dies, not *the* place: with the same
+build and the same folder the death moves between an indirect mesh, a 3-D texture's first
+read, and a state prelude. What does not move is the moment — about 100 s into the world.
+
+The memory line from the second before it is the first thing that has looked like a wall
+rather than a symptom:
+
+```
+our own allocations: 986 MB in 991,228 blocks
+  (under 4 KiB 153 MB in 977,282, to 64 KiB 174 MB in 13,180,
+   to 1 MiB 102 MB in 751, larger 557 MB in 15)
+```
+
+**977,282 separate host resources under 4 KiB**, ~991k in all, for 986 MB. A device that
+dies in a different place each run after a minute of the world, with the allocation that
+fails at the removal a 4 MB one (`no shared buffer … size=4194304`), is what running out of
+some per-process resource looks like — not what an API misuse looks like, and not what one
+bad dispatch looks like either.
+
+The shape of the next change: the small uploads should come out of a few large buffers
+(the list scratch is already pooled: `5 chunks 1 MB`), so the resource count stops
+tracking the number of small copies. Until that is measured, this is a hypothesis with a
+number next to it, not a conclusion.
+
+The probe that came with this run (`args … pending_writes=…`, commit `da6538f`) answered
+nothing because no indirect op was reached; it stays for the runs that do reach one.
+
 ### What the three switches are
 
 - `VICTORY_FEATURE_TRACE=1`: one line per title `CheckFeatureSupport`, with the
