@@ -1591,3 +1591,24 @@ That points the fix away from "do not issue it" and towards "**make sure its arg
 written before the list runs**" — the same conclusion the GBV capture pointed at from the other
 side (a list running against title memory the title had not filled yet). Both arms agree that
 the record's contents at issue time are the problem, not the record itself.
+
+### 2026-11-25 12:50: refreshing the arguments at submit time changes nothing
+
+`VICTORY_INDIRECT_ARGS_AT_SUBMIT=1` (new): the argument range of every indirect record is
+remembered when its record is prepared and refreshed again from title memory just before its
+list goes to the card — the direct test of "the copy is made too early". Same choreography, 330 s,
+WARP, DRED:
+
+```
+story=7   removals=4
+list 5 of 8, of its 582: indirect kind 10 max 1 at 0xd49406300 args [0, 0, 0, 0, 0]
+```
+
+No change. So the five words are not "written late and missed": they are zero at both moments.
+That kills the prepare-time-copy explanation for this record, and leaves two readings — the title
+never writes them (and expects something else to have filled them, or expects the record not to
+run), or they are written into a *different* range than the one read here (`0xd49406300` differs
+from run to run, so the address moves with the title's own layout).
+
+The switch stays in the tree, off by default, as the instrument for the next look; what it just
+ruled out is worth as much as a fix.

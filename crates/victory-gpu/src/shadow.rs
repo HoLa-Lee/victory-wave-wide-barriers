@@ -2859,6 +2859,40 @@ pub(crate) fn find(address: u64, len: u64) -> Option<Arc<Shadow>> {
 /// (and copied) anew. Run 71, on a 256 KiB grid: 350 MB copied per frame
 /// against 120 MB, 7,087 write-watch askings against 2,600, and 5,263
 /// windows (4.5 GB) let go in two minutes against 393 in a whole run.
+/// `VICTORY_INDIRECT_ARGS_AT_SUBMIT=1`: the ranges of indirect arguments are
+/// remembered when their record is prepared and refreshed again just before
+/// their list goes to the card. The title writes those arguments between the
+/// two moments, and a copy made only at prepare time hands the card zeros.
+static DEFERRED_ARGS: std::sync::Mutex<Vec<(Arc<Shadow>, usize, usize)>> =
+    std::sync::Mutex::new(Vec::new());
+
+fn args_at_submit() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VICTORY_INDIRECT_ARGS_AT_SUBMIT").is_some())
+}
+
+pub(crate) fn defer_args(shadow: Arc<Shadow>, from: usize, len: usize) {
+    if !args_at_submit() {
+        return;
+    }
+    let mut queue = DEFERRED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+    if queue.len() < 4096 {
+        queue.push((shadow, from, len));
+    }
+}
+
+/// Called with a submission's lists about to run: refreshes every deferred
+/// argument range from title memory as it stands now.
+pub(crate) fn refresh_deferred_args() {
+    let ranges: Vec<_> = {
+        let mut queue = DEFERRED_ARGS.lock().unwrap_or_else(|e| e.into_inner());
+        queue.drain(..).collect()
+    };
+    for (shadow, from, len) in ranges {
+        shadow.update(from, len);
+    }
+}
+
 pub(crate) fn find_any(address: u64, len: u64) -> Option<Arc<Shadow>> {
     // With whole windows (the default) there is one window to a cell and
     // nothing to choose: exactly `find`.

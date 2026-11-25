@@ -3473,7 +3473,8 @@ impl Host {
                 // In the order of the queue: the sends of title bytes so
                 // far are ahead of this fetch, every later one behind it.
                 let order = QUEUE_ORDER.lock().unwrap_or_else(|e| e.into_inner());
-                self.queue.ExecuteCommandLists(&lists);
+                crate::shadow::refresh_deferred_args();
+        self.queue.ExecuteCommandLists(&lists);
                 let after = *order;
                 drop(order);
                 self.card_sent();
@@ -4148,7 +4149,8 @@ impl Host {
             *submitted += 1;
             // SAFETY: closed lists; the fence is ours.
             let signalled = unsafe {
-                self.queue.ExecuteCommandLists(&lists);
+                crate::shadow::refresh_deferred_args();
+        self.queue.ExecuteCommandLists(&lists);
                 self.queue.Signal(&self.fence, *submitted)
             };
             self.card_sent();

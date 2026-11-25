@@ -1,4 +1,4 @@
-//! Draws on the host GPU (decision 0007, step 3). A list keeps the state
+﻿//! Draws on the host GPU (decision 0007, step 3). A list keeps the state
 //! the title sets for its draws (pipeline, descriptor heaps, root
 //! arguments, vertex and index buffers, targets); each draw then brings the
 //! host list up to date: the host pipeline and our root signature, the
@@ -222,14 +222,14 @@ pub(crate) struct State {
     /// Graphics, compute.
     host_roots: [usize; 2],
     host_heaps: [usize; 2],
-    /// Tables made afresh in this list: (table, slot count, contents) → first
+    /// Tables made afresh in this list: (table, slot count, contents) 鈫?first
     /// dynamic slot.
     fresh_tables: std::collections::HashMap<(u64, u32, u64), u32>,
     /// The dynamic slots the list holds: title heap, first, count; given
     /// back when the list has run, is reset or released.
     dynamic: Vec<(usize, u32, u32)>,
     /// Root SRVs bound as one-view tables in this list: (title heap, title
-    /// address; 0 for none) → dynamic slot, and the host copy the slot
+    /// address; 0 for none) 鈫?dynamic slot, and the host copy the slot
     /// shows: later draws of the list bring that one up to date, whatever
     /// copy the address would find by then (`shadow.rs` `tails`).
     root_srv_slots: std::collections::HashMap<(usize, u64), RootSlot>,
@@ -2965,7 +2965,9 @@ impl State {
                     }
                     _ => (stride, max),
                 };
-                args.refresh(list, arguments, len.max(u64::from(step) * u64::from(records)));
+                let wanted = len.max(u64::from(step) * u64::from(records));
+                args.refresh(list, arguments, wanted);
+                crate::shadow::defer_args(args.clone(), arguments as usize, wanted as usize);
                 if let Some((s, at)) = &counter {
                     s.refresh(list, *at, 4);
                 }
