@@ -553,3 +553,53 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 - ⚠️ **新规矩**：给 **Marvisak/VIctory** 的 PR，分支必须从 `marvisak/main` 切；从我们的 main 切会把 36b1207 那次合并卷进去。给 **fxceless/victory-fork** 的 PR（如 #1098）才从 fork 线切
 - 卡上二进制仍是 pr-blend 旧树编的（`victory.exe.blendfix`，含同一份修复 + 设备测试），行为与 PR 里的代码一致
 - Marvisak main 上的测试结果：`197 passed / 2 failed / 1 ignored`，**2 failed 就是 FIND-9 那两个**（main 没有 `31714de` 的 clamp），与本改动无关
+
+---
+
+## 20. GitHub 的回复与本轮应对（2026-11-26 06:35）
+
+### 20.1 PR #2471 —— **已被维护方关闭**（`merge-candidate` 之后第二意见翻案）
+
+`Marvisak` 22:10Z 关闭，理由：**info queue 是设备级的，多个 worker 并发拒管线，`log_messages()` 抽到的第一条可能属于别人的管线** —— 归因不成立；而 `log_messages` 本来就把每条消息单独打成 `D3D12: …` 警告。
+
+已回评 `7176348325`：**接受，不申辩**。并给出证据说明"单独那行已经够用"：`VICTORY_D3D12_DEBUG=1` 下我们**没有这个 PR 也**读到了 `R8_UINT` 那条原话，才有的 #2790；同一次运行还读到了 wave64 与 1,000,000 堆上限。`messages` 命名 nit 作废。
+→ **教训**：这类"把调试层消息贴到拒绝行"的改动，价值全在归因；归因不可靠时，功能增量是 0。
+
+### 20.2 PR #2478 —— **triage 转为 `merge-candidate`**（head `c8d6571`，20:18Z）
+
+四条评审（diagnostics 门控、`refresh_all` 前置检查、行尾换行、`0` 与 `is_multiple_of`）**全部确认到位**；正文数字被点明"支持动机但评审无法复现"。现在只等维护者批 CI。
+
+### 20.3 PR #2790 —— 两条评审，**一个真实 bug，已修**
+
+- `kotekompotek`：+68k/583 文件不是可评审的改动（那是分支切错了，已重做成单文件）
+- `fuzeofficlal`（RTX 5090 实测 + 规格审查）：**`IndependentBlendEnable == FALSE` 的语义被我漏了** —— 默认 FALSE 时 `RenderTarget[0]` 应用到所有已绑定 slot、`RenderTarget[1..]` 被忽略，于是
+  1. **漏关**：RT0 浮点且开混合 + RT2 是 `R8_UINT` 且自己 `BlendEnable=false` → 我们什么都不改，设备照样拒
+  2. **过宽关**：RT0 是整数且开混合 + RT1 浮点 → 我们关掉 RT0 也把浮点 slot 的混合关掉了
+
+**修法**（`69d483f`，单文件 **+199/−3**）：
+- `IndependentBlendEnable == false` 且有整数 slot 且 slot0 在混合时：**把 slot0 的状态复制到全部 slot 并置 `IndependentBlendEnable = true`**，然后只关整数 slot；全部 slot 都是整数时不必独立，直接关 slot0（共享态一起关）
+- 还给 `slots()` 补回了被我自己弄丢的文档注释（第一次打补丁时把两段 doc 合并了）
+
+**真实设备验证**（在 fork 线有 `dxc`/`host()` 脚手架的树上做，PR 树没有这套助手）：构造 fuzeofficlal 的"漏关"场景（RT0 `R8G8B8A8_UNORM` 混合开、RT1 `R8_UINT` 自己的 BlendEnable=false、`IndependentBlendEnable=false`）→ 设备**拒绝**；`settle_integer_targets()` 之后 → **建得出来**，并断言 slot0 仍在混合、slot1 不在、独立混合已开。
+→ 已回评 `7176318635`。
+
+### 20.4 PR #1098 —— 一条评审，**按建议收紧**
+
+`liuycsbxbxn` 认同"不变量写法"，并指出 **#1110**（同一文件、已开）仍然写 `kept == [1,2] || kept == [64,65]`，**锁了组内 lane 顺序**；两条小建议：
+- `assert_eq!(kept_at.len(), 2, …)` 单独成断言（现在做了，`zeroed` 也独立）
+- 测量表要有说服力（保留，并把"组内 lane 顺序也不是承诺"写进同一条注释）
+
+→ `bfbb167`（+16/−5），测试 20/20；已回评 `7176346660`：若维护者更愿意要 #1110，我们关掉 #1098。
+
+### 20.5 认领机器人：只恢复了一半
+
+`forge-status` 最新 `974a507 21:50Z Forge status` —— 但那次只改了 `STATUS.md`/`status.json`；**`CLAIMS.md` 仍是 `sha=5d4c495`（13:48Z 的 "Claims" 提交）**，`FIND-9`/`FIND-20`/`NEW-20` 仍显示 `open`、无 holder。→ 我们的 `claiming:`/`done:`/`finding:` 还在队列里，**不是格式问题**。
+
+### 20.6 现在四个 PR 的状态
+
+| PR | head | 状态 |
+|---|---|---|
+| #2471 | `0cd1a79` | **已关闭**（归因不可靠），已回评接受 |
+| #2478 | `c8d6571` | **merge-candidate**，等维护者批 CI |
+| #2790 | `69d483f` | 单文件 +199/−3，`IndependentBlendEnable` 已修，等复看 |
+| #1098（fxceless） | `bfbb167` | 按评审收紧，等复看 |
