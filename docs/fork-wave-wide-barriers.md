@@ -1159,3 +1159,11 @@ next wall worth watching: 9.85 GB resident for one title is why this machine's f
 matters (`8,881 MB free, 29,073 MB left to commit` in the run above). And a run like this owns
 the machine: with it going, no other measurement is worth taking (this round took none), which
 is the practical cost of the world being 2 fps on WARP.
+
+**Correction, same minute:** the process that pid belonged to was replaced between two reads —
+the run is 2.1 minutes old, not 33, so "33+ minutes in the world" does not hold and is struck.
+What does hold for the current one: 2 fps, 631 ms a frame, 15 draws, and a working set that has
+grown to **13.43 GB** (from 9.85 GB minutes earlier) — memory is worth watching, but no claim
+about half an hour of durability is supported by these two reads. The durable runs this report
+can vouch for remain the 100 s card run (30 fps, 0 removals) and the 185 s WARP run (4.4–21.7
+fps, 0 removals).
