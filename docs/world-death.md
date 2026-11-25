@@ -315,3 +315,33 @@ samples free RAM and the process's working set every ten seconds, printing the l
 memory line and where the run failed. Every number in this document that mentions gigabytes came
 from that loop or from the `memory:` line it prints at the end; anyone re-running the
 investigation should start there rather than at the disassembly.
+
+## The ten gigabytes are not waste — they are the story's textures, duplicated by design
+
+The memory line at the removal, read in full:
+
+```
+host textures: 23962 alive 10012 MB, 24871 placed in title memory
+made so far: 26167 upload buffers 8972 MB, 11 shared buffers 207 MB, 60 card buffers 430 MB
+```
+
+**24,871 of the title's textures are *placed* in its own memory** — and this layer gives each of
+them a host texture of the same size, because a placed texture's texels live in the title's
+address space and the card cannot sample that. So the 10 GB is the story's texture set, copied
+once, not a leak: 24k textures of a 208 GB pack arrive in three minutes and each one needs a
+GPU-visible twin.
+
+That is why every cheaper idea failed. Sharing between textures cannot help (`sharing one 0` on
+the card, and there is nothing to share when each placed texture has its own memory). Eviction
+cannot help while the set is being *used* (the `VICTORY_IDLE_MS` run freed 2 GB of copies and
+paid 4 GB in re-staged uploads). The layer has no budget and no streaming: it makes a copy when a
+texture is first used and keeps it until the texture is released or idle for ten seconds.
+
+So the world needs what a PC port of this title would need anyway: **a budgeted texture cache
+with streaming** — a cap on host copies' bytes, least-recently-used eviction under that cap, and a
+re-upload path that does not double the cost when it fires (the staging it re-creates is the
+4.3 GB the idle experiment measured). That is a piece of work, not a patch, and it is the honest
+answer to "why does the world die at 212 seconds".
+
+On the card the same duplicate would land in 16 GB of VRAM — which is the number to watch when
+that path is measured next.
