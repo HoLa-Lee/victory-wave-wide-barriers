@@ -1086,3 +1086,28 @@ cutscene at 64 MB.
 So of the three budgets measured — 192 MB (heap 420.8 ms), 64 MB (139–499 ms), 32 MB (111–224 ms,
 one frame at 3.1 fps) — 64 MB is the one that keeps the pictures whole while halving the pass; 32 MB
 is the one to try next for speed, with the same capture at 5500 as the check.
+
+## How to run it today (the configuration this document ends on)
+
+```powershell
+# the card, the story route, the cutscene
+.\tools\drive_card.ps1 -Tag run1 -Seconds 700 -Seed -Script `
+  ((60..200 | ForEach-Object { "$_:Up,$($_+1):Enter,$($_+2):Up,$($_+3):Enter,$($_+4):Down,$($_+5):Down,$($_+6):Enter" }) -join ',')`
+  + ",245:S,255:Enter,268:Enter" + ((285..690 | ForEach-Object { ",$_:Enter" }) -join '')
+```
+
+with the environment of that script plus:
+
+```powershell
+$env:VICTORY_FAST           = "1"     # the sample skip and the 8-frame refresh stride
+$env:VICTORY_TEXTURE_STAGE_MB = "64"  # halve the heap pass (192 -> 420.8 ms, 64 -> 139-499 ms)
+```
+
+32 MB was the other candidate: same pictures (frame 5000 = 1,110,906 bytes), frames 877.6–1087.9 ms
+in its run against 64 MB's 703.0–897.9 — the difference is inside the run-to-run variance, so 64 MB
+stays the recommendation.
+
+What that produces, measured: 0.9–1.4 fps in the opening cutscene with the pictures whole, the flow
+past every setup page, saves committed, and seven hundred seconds without a device removal or a
+trap. That is where this branch stands, and the docs beside this one say what is left
+(`next-steps.md`) and what was ruled out on the way (`world-death.md`).
