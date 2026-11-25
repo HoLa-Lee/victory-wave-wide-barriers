@@ -490,3 +490,28 @@ So the mechanism is confirmed and the ceiling is now the remaining 1.7–3.9 s: 
 change (the story is streaming them in), and the fingerprint is only a skip for the ones that do
 not. The next levers are the ones the frame line names beside it: 8,490 draws a frame, 1,935 of
 them dropped for want of a host pipeline, and a heap pass of 904 ms.
+
+## The 458 refused compute pipelines are WARP's wave size, and the debug layer says so
+
+`log_messages()` was being called on a refused pipeline and its answer thrown away. Logged, with
+the debug layer installed (`VICTORY_D3D12_DEBUG=1`), the refusal names itself:
+
+```
+host pipeline refused error=0x80070057 shaders=[compute 754e38ca2378a43e]
+  messages=Some("ID3D12Device::CreateComputeShader: Shader wants wave lane count of 64 but
+  maximum wave lane count for device is 4. To check for support, check device caps via the
+  CheckFeatureSupport() API")
+```
+
+**458 refusals in a single boot on WARP.** The title's compute shaders are wave64 (RDNA2), WARP
+reports 4 lanes, and no compute pipeline of theirs can be created there. That is why the world on
+WARP has 1,935 dropped draws a frame and why its picture is incomplete — not a translation bug and
+not something `CheckFeatureSupport` can be asked around: the device simply cannot express wave64.
+
+It also settles which path the project should spend its time on: the card, where those shaders
+create. The WARP route stays useful for the menus (which touch no wave64 compute) and for its
+cheap, repeatable runs, but the world's correctness cannot be judged there at all.
+
+For the fork's own notes: emulating wave64 on a wave4/wave32 device means splitting each wave
+intrinsic across two waves with groupshared memory — a compiler feature, not a switch, and worth
+it only if someone needs the WARP world specifically.

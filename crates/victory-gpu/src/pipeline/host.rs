@@ -1,4 +1,4 @@
-//! Host pipelines for title pipelines (decision 0007, step 3): the
+﻿//! Host pipelines for title pipelines (decision 0007, step 3): the
 //! title's graphics state with the translated shaders, under a root
 //! signature of our own that the translated shaders' bindings define
 //! (`victory_shader::emit`): per stage one block of root constants for the
@@ -536,8 +536,8 @@ impl HostPipeline {
             let pso = match made {
                 Ok(pso) => pso,
                 Err(e) => {
-                    tracing::warn!(error = %e, ?shaders, "host pipeline refused");
-                    host.log_messages();
+                    let messages = host.log_messages();
+                    tracing::warn!(error = %e, ?shaders, ?messages, "host pipeline refused");
                     return None;
                 }
             };
