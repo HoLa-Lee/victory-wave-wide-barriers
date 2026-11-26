@@ -1023,9 +1023,6 @@ impl Staging {
             // the work evenly instead of one frame taking all of it.
             let phase = ((self.memory as usize) >> 16) as u64 % every;
             if crate::frame::current() % every != phase {
-                REFRESH_ASKED.fetch_add(1, Relaxed);
-                #[cfg(feature = "diagnostics")]
-                count_refresh_skipped();
                 return;
             }
         }
