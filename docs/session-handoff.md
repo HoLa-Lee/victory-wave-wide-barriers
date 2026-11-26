@@ -839,3 +839,20 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 Marvisak/VIctory：**#2478**（纹理刷新步长，merge-candidate）、**#2892**（`cargo xtask refusals`）、**#2937**（view-heap cap 测试，merge-candidate）、**#3000**（空 root-constants 崩溃，merge-candidate）；已关：#2471、#2790、#3077。
 fxceless/victory-fork：**#1098**（预算测试不变量）、**#1343**（本会话新开的 issue：测试 host 的空常量崩溃，含两处行号与修法）、以及在 #501 / #953 / #833 下留的三条卡上数据。
 四个 Marvisak PR 的 CI 全部停在 `action_required`（首次贡献者门闸），批准请求已发在 #1026 与 #1633。
+
+### 24.8 其它盘（2026-11-27 06:20 补查）
+
+**D: 上没有本任务的文件。** 逐项查过 `D:\dsh`、`D:\新建文件夹`、`D:\sync`、`D:\QuarkCloudDrive`、`D:\upscale-workflow`、`D:\ProgramData`、`D:\NVIDIA`（各深 3 层），没有 `victory`/`scarlett`/`xbox` 相关的任何东西。D: 的大项都是游戏与软件：`steam1` 333.5 GB、`EA` 93.2、`NVIDIA` 40.2、`StarCraft II` 25.9 —— 与本任务无关。
+
+`D:\dsh`（1.48 GB）是**运行本会话的 DeepSeek Harness 本体**（Electron 应用：`DeepSeek Harness.exe`、`resources`、`locales`，装于 11-10，早于本任务），不是项目产物。
+
+**别盘上的本项目相关物**：
+
+| 盘 | 内容 | 规模 |
+|---|---|---|
+| F: | **标题本体**（`F:\迅雷云盘\GTA6-Cyberleek官网文件\GTA6.Xbox.v1.0.2.1-CYBERLEEK`） | **208.6 GB / 110 个文件** |
+| G: | `G:\pack`（标题的数据包，`drive_card.ps1` 从 `G:\pack\...` 读） | 已用于运行；体积随盘统计 |
+
+**空间现状**：C: 剩 **24 GB** / D: 剩 **353.8 GB** / E: 剩 126.4 / F: 剩 195.8 / G: 剩 164.9。
+
+**结论与建议**：以后把构建目录放 D:（`$env:CARGO_TARGET_DIR='D:\vic-target'`），C: 就只留源码、文档与日志。现在卡上那个 `victory-fork\target-b`（1.44 GB）与废弃的 `target`（6.24 GB）都可以直接搬/删，C: 立刻多出 7.7 GB。
