@@ -781,6 +781,7 @@ mod tests {
 
     #[test]
     fn warp_adapter_accepts_only_software() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         // This probes DXGI without creating a D3D12 device or running a title.
         // SAFETY: plain DXGI adapter queries.
         let raw = unsafe {
@@ -8650,6 +8651,7 @@ void main() {
 
     #[test]
     fn warp_title_bytes_go_up_and_shader_writes_come_back_whatever_the_queues() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         use windows_sys::Win32::System::Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc};
         const MEM_WRITE_WATCH: u32 = 0x0020_0000;
         let Some(host) = host() else {
@@ -8810,6 +8812,7 @@ void main() {
     /// itself; `VICTORY_QUEUE2_REFETCH=0` shows the fault).
     #[test]
     fn warp_a_piece_fetched_while_a_later_flight_writes_it_is_fetched_again() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         use windows_sys::Win32::System::Memory::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE, VirtualAlloc};
         const MEM_WRITE_WATCH: u32 = 0x0020_0000;
         let Some(host) = host() else {

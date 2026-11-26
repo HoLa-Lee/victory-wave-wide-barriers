@@ -823,6 +823,7 @@ void main() {
     /// of the submission that wrote them without any wait of ours between.
     #[test]
     fn warp_a_fetch_through_the_copy_queue_brings_what_the_direct_queue_brings() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = Warp::new(1) else {
             return;
         };
@@ -865,6 +866,7 @@ void main() {
     /// older). Sixteen of each are in the air together.
     #[test]
     fn warp_a_fetch_behind_a_fence_holds_everything_sent_before_that_fence() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = Warp::new(1) else {
             return;
         };
@@ -901,6 +903,7 @@ void main() {
     /// numbered sends are signalled in order, and the clock saw the holds.
     #[test]
     fn warp_the_direct_queue_goes_on_only_when_what_was_sent_up_is_there() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = Warp::new(3) else {
             return;
         };
@@ -958,6 +961,7 @@ void main() {
     /// landing buffer of its own until the card has passed its use.
     #[test]
     fn warp_title_bytes_reach_the_copy_through_a_landing_buffer_in_the_direct_queues_order() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = Warp::new(3) else {
             return;
         };
@@ -1016,6 +1020,7 @@ void main() {
     /// the job they were in, and not before.
     #[test]
     fn warp_a_lanes_lists_are_used_again_only_after_their_job() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = Warp::new(1) else {
             return;
         };

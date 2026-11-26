@@ -83,3 +83,21 @@ pub use watch::{
     title_memory_reading, title_memory_remapped, title_memory_remapping, title_memory_written,
     writing as kernel_will_write,
 };
+
+/// Tests that open the software adapter take turns.
+///
+/// The WARP-backed tests share this process's device and pipeline caches
+/// (indirect's clamp, inplace's rig, the copy queues), so two of them
+/// running at once make each other fail - measured on this machine, one run in
+/// eight of the full suite, and eight of twenty when the warp_ tests are run
+/// alone at eight threads; the failing assertion moves between
+/// inplace::tests::warp_a_title_buffer_in_place_shows_its_bytes_at_its_offset
+/// (VirtualFree(MEM_DECOMMIT) refused) and
+/// indirect::tests::warp_budget_saturates_without_wraparound_and_preserves_draw_fields
+/// (the budget not saturated), depending on which finishes first. One lock
+/// costs nothing for the tests that do not ask for the adapter.
+#[cfg(test)]
+pub(crate) mod test_sync {
+    /// Held by a WARP test for its whole body.
+    pub(crate) static WARP: std::sync::Mutex<()> = std::sync::Mutex::new(());
+}
