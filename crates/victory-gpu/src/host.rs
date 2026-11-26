@@ -3540,6 +3540,16 @@ fn late_line(frames: f64) {
             r[3] / 1000.0,
             r[4] / 1000.0,
         );
+        let m: Vec<f64> = crate::shadow::relay_merge_taken().iter().map(|&u| u as f64 / frames).collect();
+        tracing::info!(
+            "a landing's merge per frame: {:.1} pieces, {:.2} MB; the lock waited {:.2} ms, {:.2} ms under it before the \
+             write, the write {:.2} ms",
+            m[4],
+            m[3] / 1e6,
+            m[0] / 1000.0,
+            m[1] / 1000.0,
+            m[2] / 1000.0,
+        );
         if inflight_fetch() {
             let i: Vec<f64> = INFLIGHT_STATS.iter().map(|i| i.swap(0, Ordering::Relaxed) as f64 / frames).collect();
             tracing::info!(

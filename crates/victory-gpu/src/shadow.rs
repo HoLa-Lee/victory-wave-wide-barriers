@@ -1557,6 +1557,19 @@ fn find_pieces(scans: Vec<(usize, usize, usize, usize, usize)>) -> Vec<Vec<(usiz
 /// ranges compared in windows and in buffers' copies.
 static BACK_CLASS: [AtomicU64; 7] = [const { AtomicU64::new(0) }; 7];
 
+/// [`Shadow::relay_merge`]'s time, since the last frame line: the lock's
+/// wait, everything under it up to the write (the piece copied, diffed, title
+/// memory read, merged), the write itself; then the bytes written and the
+/// pieces handled. The frame line's "copying back" is this thread's landing in
+/// all, so what is left of it is the finding of the pieces
+/// (`crate::shadow::find_all`) and the card wait.
+pub(crate) static RELAY_MERGE: [AtomicU64; 5] = [const { AtomicU64::new(0) }; 5];
+
+/// Takes [`RELAY_MERGE`] as of now, zeroing it.
+pub(crate) fn relay_merge_taken() -> [u64; 5] {
+    std::array::from_fn(|i| RELAY_MERGE[i].swap(0, Ordering::Relaxed))
+}
+
 /// For the frame-rate line: where the CPU's search for shader writes goes
 /// (per frame). A copy of a title buffer can go to the card's memory,
 /// where the card does the search (`VICTORY_CARD_BUFFERS_MIN_MB`); a
@@ -2581,11 +2594,14 @@ impl Shadow {
     /// never see each other half done. `now` and `title` are scratch
     /// memory. Returns the bytes written to title memory.
     pub(crate) fn relay_merge(&self, at: usize, n: usize, now: &mut Vec<u8>, title: &mut Vec<u8>) -> usize {
+        let started = std::time::Instant::now();
         let start = self.start as usize;
         if self.card.is_some() || n == 0 || at + n > self.len as usize {
             return 0;
         }
         let mut snapshot = self.before.lock().unwrap_or_else(|e| e.into_inner());
+        RELAY_MERGE[0].fetch_add(started.elapsed().as_micros() as u64, Ordering::Relaxed);
+        let held_now = std::time::Instant::now();
         let Some(before) = snapshot.as_mut() else {
             return 0;
         };
@@ -2628,7 +2644,12 @@ impl Shadow {
         }
         crate::watch::writing(start + at, n);
         merge_race(as_read.as_deref(), (self.start, self.len), start + at, &title[..], "pc relay");
+        RELAY_MERGE[1].fetch_add(held_now.elapsed().as_micros() as u64, Ordering::Relaxed);
+        let writing = std::time::Instant::now();
         crate::host::write_mapped((start + at) as *mut u8, title.as_ptr(), n);
+        RELAY_MERGE[2].fetch_add(writing.elapsed().as_micros() as u64, Ordering::Relaxed);
+        RELAY_MERGE[3].fetch_add(n as u64, Ordering::Relaxed);
+        RELAY_MERGE[4].fetch_add(1, Ordering::Relaxed);
         n
     }
 
