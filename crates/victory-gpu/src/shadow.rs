@@ -1995,4 +1995,58 @@ pub(crate) mod tests {
         unregister(p, p as u64);
         crate::watch::tests::free(p);
     }
+
+    /// FIND-14: a copy-back that is still pending when the title gives its
+    /// range back - and takes the same addresses again for something else -
+    /// must not put the submission's bytes into the new use of them.
+    ///
+    /// The shadow holds the address it was registered with and writes back
+    /// through it; nothing connects `crate::watch`'s "memory freed and
+    /// allocated again while a tracker holds it is not seen" with the pending
+    /// snapshot. This asks the question with no game and no AMD card: does the
+    /// byte a shader wrote land where the title put its next allocation?
+    #[test]
+    fn a_pending_copy_back_does_not_write_into_memory_the_title_took_back() {
+        use windows_sys::Win32::System::Memory::{MEM_COMMIT, MEM_RESERVE, MEM_RELEASE, PAGE_READWRITE, VirtualAlloc, VirtualFree};
+        let len = PAGE;
+        let p = crate::watch::tests::pool(1);
+        register(p, p as u64, len as u64);
+        let Some(copy) = find(p as u64, len as u64) else {
+            unregister(p, p as u64);
+            return; // no host GPU here
+        };
+        copy.update(p, len);
+        // The submission takes its snapshot, and a shader writes one byte.
+        copy.writing(p, 64, false);
+        copy.write_host(p as u64 + 24, &[0x99]);
+        // The title gives the range back before the copy-back has run...
+        unregister(p, p as u64);
+        // SAFETY: our own allocation, freed once.
+        unsafe { VirtualFree(p as *mut _, 0, MEM_RELEASE) };
+        // ...and takes the addresses again for something of its own.
+        // SAFETY: a fresh allocation of the same size, filled for the test.
+        let q = unsafe { VirtualAlloc(std::ptr::null(), len, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE) } as usize;
+        assert!(q != 0);
+        // SAFETY: the allocation above.
+        unsafe { std::ptr::write_bytes(q as *mut u8, 0xee, len) };
+        if q != p {
+            // The allocator handed out somewhere else, so the old address is
+            // nobody's: writing there is the same hazard, but it cannot be
+            // observed without faulting, and this test is about the bytes.
+            // SAFETY: as above.
+            unsafe { VirtualFree(q as *mut _, 0, MEM_RELEASE) };
+            eprintln!("the allocator did not reuse the address ({p:#x} then {q:#x}); not observed");
+            return;
+        }
+        // The copy-back of the submission that is over runs now.
+        copy.copy_back(p, 64);
+        // SAFETY: the re-used allocation, still mapped.
+        let after = unsafe { (q as *const u8).add(24).read_volatile() };
+        // SAFETY: as above.
+        unsafe { VirtualFree(q as *mut _, 0, MEM_RELEASE) };
+        assert_eq!(
+            after, 0xee,
+            "a byte a shader wrote for a submission that is over landed in memory the title re-used"
+        );
+    }
 }
