@@ -1158,6 +1158,7 @@ void main() {
     /// compare before it, also a change back.
     #[test]
     fn warp_card_compare_stores_the_hash_it_made_when_told() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
@@ -1225,6 +1226,7 @@ void main() {
     /// slots is written but copies nothing.
     #[test]
     fn warp_card_fetch_copies_flagged_pieces_to_their_slots() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         use crate::host::{CARD_COMPARE, CARD_FETCH, INFLIGHT_NONE, INFLIGHT_SLOT};
         let Some(mut warp) = WarpHarness::new() else {
             return;
@@ -1357,6 +1359,7 @@ void main() {
     ///     records into `dst_args` at offset `0`.
     #[test]
     fn warp_count_buffer_ignores_garbage_tail_and_preserves_source() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
@@ -1583,6 +1586,7 @@ void main() {
 
     #[test]
     fn warp_gathered_records_come_out_as_if_clamped_one_by_one() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
@@ -1666,6 +1670,7 @@ void main() {
 
     #[test]
     fn warp_window_leaves_unfilled_slots_empty_and_uncharged() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
@@ -1744,6 +1749,7 @@ void main() {
 
     #[test]
     fn warp_budget_saturates_without_wraparound_and_preserves_draw_fields() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
@@ -1944,6 +1950,7 @@ void main() {
     /// word record by record, which of them fitted was up to the GPU.)
     #[test]
     fn warp_a_group_charges_its_records_in_lane_order() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };
@@ -2190,6 +2197,7 @@ void main() {
     /// Every record runs once, with the group count it asked for.
     #[test]
     fn warp_window_executions_read_their_records_with_no_barrier_between() {
+        let _warp = crate::test_sync::WARP.lock().unwrap_or_else(|e| e.into_inner());
         let Some(mut warp) = WarpHarness::new() else {
             return;
         };

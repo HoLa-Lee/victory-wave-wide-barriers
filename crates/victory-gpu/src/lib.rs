@@ -81,3 +81,12 @@ pub use watch::{
     title_memory_reading, title_memory_remapped, title_memory_remapping, title_memory_written,
     writing as kernel_will_write,
 };
+
+/// Tests that open the software adapter take turns: they share this process's
+/// device and pipeline caches (indirect's clamp, inplace's rig, the copy
+/// queues), so two at once make each other fail.
+#[cfg(test)]
+pub(crate) mod test_sync {
+    /// Held by a WARP test for its whole body.
+    pub(crate) static WARP: std::sync::Mutex<()> = std::sync::Mutex::new(());
+}
