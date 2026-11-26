@@ -780,3 +780,62 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 - **把 `marvisak/main` 合进我们的 main**：冲突遍布 20+ 文件（shader/gpu/apps 三层都动），要按 shader → gpu → apps 分批合、每批编译通过再进下一批。**这是目前最大的一块未做工作。**
 - harness 的一个真实越界（`slots = d.views.len()` 但每个带资源的 view 写两个描述符）——单独一行修，但单独 PR 的证据要靠 #3000 才能跑起来，暂缓。
 - `FIND-15`（NVIDIA 世界 hang 的两个停点）与 `FIND-19`（device slot 0x218 的 `E_NOTIMPL`）都需要游戏侧实验。
+
+---
+
+## 24. 本地落盘盘点（2026-11-27 06:10，收工时）
+
+这台 C: 上属于本任务的东西（含 handoff 里更早的会话）合计 **约 29 GB**。分四类，附"能否删"。
+
+### 24.1 代码与文档（要留）
+
+| 位置 | 大小 | 内容 |
+|---|---|---|
+| `default-workspace\victory-fork-history\` | **0.22 GB** | **权威仓库**：`docs/`（10 个文档，`world-death.md` 63 KB、`session-handoff.md` 60 KB、`fork-wave-wide-barriers.md` 104 KB、`merge-upstream-plan.md`）、`tools/`（`drive_card.ps1`、`frame_stats.ps1`、`world_ram.ps1`、`disasm_rva.py`）、`xtask/src/refusals.rs`（本会话新增的 PR #2892 内容） |
+| `default-workspace\VIctory-upstream\` | 0.90 GB | 上游克隆（备用） |
+| `default-workspace\victory-fork\`（**源码**） | 0.004 GB | 卡上构建树的源码（脏工作树，历史旧） |
+| `screenshots-local\` | 3.9 MB | 6 张游戏截图（按上游资产政策**不能进仓库**，只在本机） |
+| workspace 根目录本任务的松散文件 | 3 MB / 86 个 | 早期会话留下的 `add_*_section.py`、`handoff_round*.py`、`commit_*.py`、`resolve_view_heap.py` 等一次性脚本 |
+
+### 24.2 构建产物（可删，能重建）
+
+| 位置 | 大小 | 说明 |
+|---|---|---|
+| `victory-fork\target\` | **6.24 GB** | 早期 debug 构建，**已不用**（卡上跑的是 `target-b`） |
+| `victory-fork\target-b\` | **1.44 GB** | **卡上二进制所在地**（`diag\victory.exe`，8.1 MB）→ 删了要重编 ~40 s |
+| `victory-fork-history\target-merge\` | 0.13 GB | 一次合并实验的 target |
+| `C:\Windows\Temp\find20\` | **1.23 GB** | 各 worktree 共用的测试 target（本会话跑了 ~20 次 `cargo test`） |
+| `C:\Windows\Temp\pr-stride\` | 0.62 GB | #2478 的 worktree + 自己的 target |
+| Temp 下 10 个 worktree（`pr-blend`/`pr-hostblend`/`pr-emptyud`/`pr-xtask`/`pr-2612`/`pr-find14`/`pr-f14test`/`merge-up`/`pr-copyback`/`pr-intake`/`pr-wave64`/`wave64-raw`） | 各 0.08 GB | 每个都对应一个可重开的 PR/实验；**都已在远端有分支或有记录** |
+| Temp 下的二进制备份 | 46 MB / 5 个 | `victory.exe.{world1bak,blendfix,wave64,copyback,nofix}`（各次 A/B 的那一版） |
+
+### 24.3 运行数据（要留一部分当证据）
+
+| 位置 | 大小 | 说明 |
+|---|---|---|
+| `vlogs\` 松散日志 | 663 MB / **376 个** `.err.log` | 每次卡上运行的日志；**单份最大 42 MB**（`main63`）。本会话关键的那几份：`world1`（1800 s）、`dbg1`（调试层四条发现）、`blend0`/`blend1`（像素 A/B）、`wave64a`（#854）、`copyback1`（回拷四桶）、`main63`（上游基线） |
+| `vlogs\caps-*\` | **1.29 GB** / 66 个目录 | 抓帧目录（`caps-cycle2` 358 MB、`caps-lag5` 205 MB…） |
+| `vlogs\data-*\` | 0.51 GB / 181 个目录 | 每次运行的 `VICTORY_DATA_DIR`（`drive_card.ps1` 每次重建同名目录，所以旧的会被覆盖） |
+| `vlogs\monitor\` | 246 KB / 21 个文件 | 8 小时监控的 16 轮快照 + `git-monitor-report.md` + `snapshot.ps1` |
+| `AppData\Local\victory\cache\` | **6.96 GB / 114,434 个文件** | 标题自己的缓存：`shaders` **6.41 GB**（翻译后着色器，每个构建一个目录）、`pipelines` 0.43 GB、`images` 0.11 GB |
+
+### 24.4 工具链
+
+`~\.rustup` 0.6 GB、`~\.cargo` 0.2 GB、`~\.dsh` 0.8 GB —— 保留。
+
+### 24.5 收工状态下已清理的
+
+本会话删掉 **7.04 GB**：`C:\Windows\Temp\ci-check`（3.58）+ `ci-2478`（3.46）—— 为验证 CI 三条命令临时建的两个 target。C: 空闲因此从 15.5 GB 回到 **23–24 GB**。
+
+### 24.6 若还要再省，按这个顺序（合计 ≈17 GB）
+
+1. `AppData\Local\victory\cache\shaders` **6.41 GB** —— 纯缓存，代价是下次首跑重新翻译
+2. `victory-fork\target` **6.24 GB** —— 不再使用的 debug 构建
+3. `vlogs\caps-*` **1.29 GB** + `find20` **1.23 GB** + `pr-stride` 0.62 GB
+4. `vlogs` 里除最近 5 次以外的日志（约 0.5 GB）
+
+### 24.7 远端交付物（不在本地占空间，附此备查）
+
+Marvisak/VIctory：**#2478**（纹理刷新步长，merge-candidate）、**#2892**（`cargo xtask refusals`）、**#2937**（view-heap cap 测试，merge-candidate）、**#3000**（空 root-constants 崩溃，merge-candidate）；已关：#2471、#2790、#3077。
+fxceless/victory-fork：**#1098**（预算测试不变量）、**#1343**（本会话新开的 issue：测试 host 的空常量崩溃，含两处行号与修法）、以及在 #501 / #953 / #833 下留的三条卡上数据。
+四个 Marvisak PR 的 CI 全部停在 `action_required`（首次贡献者门闸），批准请求已发在 #1026 与 #1633。
