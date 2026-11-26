@@ -108,7 +108,12 @@ fn read_untranslated(report: &mut Report, rest: &str) {
         stage: field("stage=\""),
         hash: field("hash="),
         error: match rest.split_once("error=") {
-            Some((_, error)) => error.trim().to_owned(),
+            Some((_, error)) => {
+                let reason = error
+                    .rsplit_once(" cached=")
+                    .map_or(error, |(reason, _)| reason);
+                reason.trim().to_owned()
+            }
             None => String::new(),
         },
     };
@@ -281,6 +286,37 @@ mod tests {
             .expect("the root signature refusal is there");
         assert!(root.shaders.is_empty());
         assert!(render(&report).contains("[root signature]"));
+    }
+
+    #[test]
+    fn untranslated_counts_group_by_stage_hash_and_error() {
+        let message = "WARN victory_gpu::pipeline: shader does not translate; its pipelines' draws are dropped";
+        let fields = [
+            r#"stage="compute" hash=0000000000000001 error=synthetic reason alpha cached=false ms=4 user_ms=2 kernel_ms=1"#,
+            r#"stage="compute" hash=0000000000000001 error=synthetic reason alpha cached=true ms=8 user_ms=7 kernel_ms=0"#,
+            r#"stage="compute" hash=0000000000000001 error=synthetic reason beta cached=false ms=4 user_ms=2 kernel_ms=1"#,
+            r#"stage="compute" hash=0000000000000002 error=synthetic reason alpha cached=false ms=4 user_ms=2 kernel_ms=1"#,
+            r#"stage="pixel" hash=0000000000000001 error=synthetic reason alpha cached=false ms=4 user_ms=2 kernel_ms=1"#,
+        ];
+        let log = fields
+            .map(|fields| format!("{message} {fields}"))
+            .join("\n");
+        let text = render(&parse(&log));
+        let lines: Vec<_> = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                "shaders that do not translate (4 kinds)",
+                "2x stage=compute hash=0000000000000001 synthetic reason alpha",
+                "1x stage=compute hash=0000000000000001 synthetic reason beta",
+                "1x stage=compute hash=0000000000000002 synthetic reason alpha",
+                "1x stage=pixel hash=0000000000000001 synthetic reason alpha",
+            ]
+        );
     }
 
     #[test]
