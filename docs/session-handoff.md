@@ -856,3 +856,59 @@ fxceless/victory-fork：**#1098**（预算测试不变量）、**#1343**（本�
 **空间现状**：C: 剩 **24 GB** / D: 剩 **353.8 GB** / E: 剩 126.4 / F: 剩 195.8 / G: 剩 164.9。
 
 **结论与建议**：以后把构建目录放 D:（`$env:CARGO_TARGET_DIR='D:\vic-target'`），C: 就只留源码、文档与日志。现在卡上那个 `victory-fork\target-b`（1.44 GB）与废弃的 `target`（6.24 GB）都可以直接搬/删，C: 立刻多出 7.7 GB。
+
+---
+
+## 25. 收工清理（2026-11-27 06:40）：C: 空闲 24.0 → 45.5 GB
+
+按"先删项目产物 → 再清系统缓存/垃圾 → 提交剩余本地 commit → 删本地 worktree"的顺序做完。
+
+### 25.1 删掉的项目产物（17.4 GB）
+
+| 项 | 回收 |
+|---|---|
+| `AppData\Local\victory\cache`（shaders 6.41 + pipelines 0.43 + images 0.11） | 6.96 GB |
+| `victory-fork\target`（停用的 debug 构建） | 6.24 GB |
+| `C:\Windows\Temp\find20`（共用测试 target） | 1.23 GB |
+| `vlogs\caps-*`（66 个抓帧目录；归档 PNG 仍在 `screenshots-local`） | 1.29 GB |
+| `C:\Windows\Temp\pr-stride\target` | 0.62 GB |
+| `vlogs` 旧日志（353 个文件，保留 world1/dbg1/blend0/blend1/wave64a/copyback1/main63/pix0/pix1 九个 tag） | 0.58 GB |
+| `vlogs\data-*`（181 个每次运行的数据目录） | 0.51 GB |
+
+### 25.2 清掉的系统缓存/垃圾（≈3.9 GB）
+
+`Windows\SystemTemp` 2.63 GB、`Windows\Logs` 0.23、Edge Cache+Code Cache+GPUCache 0.53、Chrome Cache 0.17、`CrashDumps` 0.34、`SoftwareDistribution\Download` 0.03；早前还清了 `pip` 2.48 + `uv` 0.54。
+**没碰**：`WinSxS`（18.1 GB，要清只能 `DISM /StartComponentCleanup`）、`C:\Windows\Installer`、`ProgramData\Package Cache`、`ProgramData\NVIDIA`。
+
+### 25.3 本地 commit 全部落地（worktree 已删，分支与提交都在）
+
+六个 worktree 里有未提交改动的，都已提交：
+
+| worktree | 提交到 | 内容 |
+|---|---|---|
+| `pr-warp` | `tests/warp-tests-take-turns` | FIND-20 的 test-only mutex + decommit 报错（+46/−5） |
+| `pr-warp-465` | 新分支 `local/find20-warp-465` | 同上，基于 465b94f（+37/−5） |
+| `pr-copyback` | 新分支 `local/copyback-instrumentation` | 回拷四桶插桩（+31） |
+| `pr-hostblend` | `tests/view-heap-cap-skip` | 顺手试的空 root-constant 守卫（+6，正式版在 `tests/empty-root-constants`） |
+| `pr-2612` | 新分支 `local/find14-test-on-2612` | 在 #2612 的 head 上跑 FIND-14 复现测试（+54） |
+| `wave64-raw` | 新分支 `local/wave64-raw` | #854 + stride 的卡上构建（−3） |
+
+detached 的提交也各自挂了分支：`local/wave64-merge`（b648174）、`local/merge-up`（4448167）、`local/intake`（df67a5f）。
+补丁另存一份在 **`D:\vic-patches\*.patch`**（6 个文件，29 KB）：`pr-warp`、`pr-warp-465`、`pr-copyback`、`pr-hostblend`、`pr-2612`、`wave64-raw`。
+
+### 25.4 18 个 worktree 全部删除
+
+`git worktree list` 现在只剩主工作树 `victory-fork-history`（`458fe04`）。所有分支、所有提交、所有已开的 PR 分支都还在；`D:\vic-patches` 是双保险。
+
+### 25.5 剩下的（要留）
+
+| 位置 | 大小 |
+|---|---|
+| `victory-fork-history`（权威仓库，docs/tools/xtask） | 0.22 GB |
+| `victory-fork`（卡上构建树：源码 + `target-b` 二进制 1.44 GB，工作树 70 个文件脏——它本来就是"合并后的构建树"，不提交） | 1.44 GB |
+| `VIctory-upstream`（备用克隆） | 0.90 GB |
+| `vlogs`（9 个关键 tag 的日志 + monitor 快照） | 0.20 GB |
+| `screenshots-local`（6 张截图，资产政策：只在本地） | 4 MB |
+| `C:\Windows\Temp` 残余（非我方） | 0.5 GB |
+
+**C: 空闲：45.5 GB**（清理前 24.0，本轮共回收 21.5 GB；若再跑 `DISM /Online /Cleanup-Image /StartComponentCleanup /ResetBase` 还能多 2–5 GB）。
