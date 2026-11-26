@@ -731,3 +731,52 @@ https://github.com/Marvisak/VIctory/pull/2790 —— `crates/victory-gpu/src/pip
 | #1098（fxceless）预算测试不变量 | `bfbb167` | open，+16/−5 |
 | #2790 整数混合 | `69d483f` | **已关闭**（上游 `a7cb47c` 做了，且带测试） |
 | #2471 拒绝日志 | `0cd1a79` | 已关闭（归因不可靠） |
+
+---
+
+## 23. 监控第 1–11 轮（2026-11-26 08:15 → 13:15）：五个 PR、两条教训、一个自我事故
+
+定时任务 `schedule-d73b3261-87e9-46ae-b5f8-072af1d6a582`，每 30 分钟一轮（16 轮 = 8 h），脚本 `vlogs/monitor/snapshot.ps1`，逐轮报告在 `vlogs/monitor/git-monitor-report.md`，每轮 JSON 在同目录。
+
+### 23.1 现在挂着的五个 PR（全部 `open` + `mergeable`）
+
+| PR | 内容 | 规模 | 状态 |
+|---|---|---|---|
+| **#2478** | 纹理刷新步长 `VICTORY_TEXTURE_REFRESH_EVERY` | +29/−3 | triage 已转 `merge-candidate`，等维护者批 CI |
+| **#2892** | `cargo xtask refusals <log>` | +313/−0 | 收到 `needs-work` 五条，**全改完**（`b040e48`），等复看 |
+| **#2937** | view-heap cap：两个测试带数字跳过（FIND-9） | +28/−3 | 等复看 |
+| **#3000** | 空 root-constant 列表不再传给运行时（崩溃修复） | +6/−0 | 等复看 |
+| **#3036** | pending copy-back 不写回收内存（FIND-14） | +75/−2 | 等复看 |
+
+已关：#2471（归因不可靠）、#2790（上游 `a7cb47c` 做了，且自带测试）。
+
+### 23.2 本轮真正做出来的东西（按价值）
+
+1. **FIND-14 复现 + 修复（#3036）**：合成测试证明 pending copy-back 会把旧提交的字节写进 title 已回收并复用的地址（`0x99` 落在新分配里）；修法是 `Shadow.gone` + `unregister` 置位 + `copy_back_or_not` 提前返回。**无游戏、无 AMD 卡**即可复现。
+2. **崩溃根因（#3000）**：`emit::memory_tests::heap_direct_texture_reads_mark_their_heap_index` 单跑就把进程打成 `0xc0000005`，根因是 harness 把**空的 root-constant 列表**（count 0 + 空 vec 指针）交给 `SetComputeRoot32BitConstants`，NVIDIA 运行时在此崩溃。修后整个 `victory-shader` 套件第一次能跑完：**299 passed / 3 failed / 3 ignored**，那 3 个失败正是被崩溃遮住的 **FIND-11**（@jujumoneylol 的 #2885，不碰）。
+3. **FIND-9（#2937）**：卡上实测 `limit for shader visible view heaps is 1000000`、实际拿到 65,540；两个测试改成"读自己拿到的 heap，低于 `HEAP_VIEWS` 就带数字跳过"。
+
+### 23.3 两条教训（写下来省下一次踩坑）
+
+- **这些 worktree 里永不 `git add -A`**：我在旧基上 `git add -A` + amend + force push，PR #2892 一度显示 `64 files / −9,562`（把上游 `63bcca4` 的成果显示成删除）。推之前必须 `git diff --stat marvisak/main..HEAD`，且分支要 rebase 到当前 `marvisak/main`。
+- **PS 5.1 写中文**：`Add-Content -Encoding utf8` 在管道里会把中文写成乱码；正确做法是先用 write 工具落一个 UTF-8 文件，再 `[IO.File]` 追加。同理 `Set-Content` 生成的 diff 带 BOM/CRLF 会让 `git apply` 失败，diff 要用 `cmd /c "git diff > file"`。
+- 另：**github.com 的 HTTPS 会间歇性拒连**（api.github.com 正常），push 要重试 3–4 次；不要以为分支坏了。
+
+### 23.4 认领表（已恢复）
+
+`CLAIMS.md` 从 `sha=5d4c495`（停摆）恢复到 `aad2c65`：
+- `FIND-9` → `in review` #2937（曾被错挂到 #3036，已在 #1633 更正 `7182924568`）
+- `FIND-14` → `in review` #3036
+- `FIND-11` → `in review` **#2885 by @jujumoneylol**（所以那 3 个 shader 失败不归我们）
+- `TEST-MED3-NAN` **在 `63bcca4` 上已不复现**（该测试通过），已在 #1633 说明可关
+
+### 23.5 上游在动什么（监控记录）
+
+`Marvisak/main`：`13f91ca → 63bcca4`，**62 文件 +9,562/−814**（含 #158 depth bounds、#2462/#2455/#2449 绑定修复、以及 `a7cb47c` 整数 RT 混合）。**main 现在能在卡上启动**（`13f91ca` 时立刻 `device removed`），但 **0.1–0.3 fps、155 个被拒管线**（我们合并线是 4.6 fps / 7 个）。
+`fxceless/victory-fork`：连续多轮 diagnostics 日志入库（run 281–300），最近一条标题是"表为什么被拒：dynamic slots 的环满了"。
+
+### 23.6 还没做（下一轮候选）
+
+- **把 `marvisak/main` 合进我们的 main**：冲突遍布 20+ 文件（shader/gpu/apps 三层都动），要按 shader → gpu → apps 分批合、每批编译通过再进下一批。**这是目前最大的一块未做工作。**
+- harness 的一个真实越界（`slots = d.views.len()` 但每个带资源的 view 写两个描述符）——单独一行修，但单独 PR 的证据要靠 #3000 才能跑起来，暂缓。
+- `FIND-15`（NVIDIA 世界 hang 的两个停点）与 `FIND-19`（device slot 0x218 的 `E_NOTIMPL`）都需要游戏侧实验。
