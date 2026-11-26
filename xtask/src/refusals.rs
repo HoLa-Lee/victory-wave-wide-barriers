@@ -108,11 +108,29 @@ fn read_untranslated(report: &mut Report, rest: &str) {
         stage: field("stage=\""),
         hash: field("hash="),
         error: match rest.split_once("error=") {
-            Some((_, error)) => error.trim().to_owned(),
+            Some((_, error)) => untranslated_reason(error.trim()).to_owned(),
             None => String::new(),
         },
     };
     *report.untranslated.entry(untranslated).or_insert(0) += 1;
+}
+
+fn untranslated_reason(error: &str) -> &str {
+    // The translator logs the cache flag and three counters after the error.
+    // Older lines can end with the error itself, including literal field names.
+    let mut rest = error;
+    for field in [" kernel_ms=", " user_ms=", " ms="] {
+        let Some((prefix, value)) = rest.rsplit_once(field) else {
+            return error;
+        };
+        if value.parse::<u64>().is_err() {
+            return error;
+        }
+        rest = prefix;
+    }
+    rest.strip_suffix(" cached=true")
+        .or_else(|| rest.strip_suffix(" cached=false"))
+        .unwrap_or(error)
 }
 
 fn read_drop(report: &mut Report, line: &str) {
@@ -281,6 +299,52 @@ mod tests {
             .expect("the root signature refusal is there");
         assert!(root.shaders.is_empty());
         assert!(render(&report).contains("[root signature]"));
+    }
+
+    #[test]
+    fn untranslated_counts_group_by_stage_hash_and_error() {
+        let message = "WARN victory_gpu::pipeline: shader does not translate; its pipelines' draws are dropped";
+        let fields = [
+            r#"stage="compute" hash=0000000000000001 error=synthetic reason alpha cached=false ms=4 user_ms=2 kernel_ms=1"#,
+            r#"stage="compute" hash=0000000000000001 error=synthetic reason alpha cached=true ms=8 user_ms=7 kernel_ms=0"#,
+            r#"stage="compute" hash=0000000000000001 error=synthetic reason beta cached=false ms=4 user_ms=2 kernel_ms=1"#,
+            r#"stage="compute" hash=0000000000000002 error=synthetic reason alpha cached=false ms=4 user_ms=2 kernel_ms=1"#,
+            r#"stage="pixel" hash=0000000000000001 error=synthetic reason alpha cached=false ms=4 user_ms=2 kernel_ms=1"#,
+        ];
+        let log = fields
+            .map(|fields| format!("{message} {fields}"))
+            .join("\n");
+        let text = render(&parse(&log));
+        let lines: Vec<_> = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect();
+        assert_eq!(
+            lines,
+            [
+                "shaders that do not translate (4 kinds)",
+                "2x stage=compute hash=0000000000000001 synthetic reason alpha",
+                "1x stage=compute hash=0000000000000001 synthetic reason beta",
+                "1x stage=compute hash=0000000000000002 synthetic reason alpha",
+                "1x stage=pixel hash=0000000000000001 synthetic reason alpha",
+            ]
+        );
+    }
+
+    #[test]
+    fn untranslated_errors_keep_cache_text_without_the_timing_fields() {
+        for reason in [
+            "synthetic error cached=entry missing",
+            "synthetic error cached=false",
+            "synthetic error cached=true ms=1 user_ms=2 kernel_ms=unavailable",
+        ] {
+            let log = format!(
+                r#"shader does not translate; its pipelines' draws are dropped stage="compute" hash=0000000000000001 error={reason}"#
+            );
+            let report = parse(&log);
+            assert_eq!(report.untranslated.keys().next().unwrap().error, reason);
+        }
     }
 
     #[test]
