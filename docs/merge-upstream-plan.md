@@ -75,3 +75,35 @@ only where it does something upstream still does not.
   machine for minutes at a time while api.github.com stays up; retry, do not rewrite the branch.
 - Keep `victory-fork/target-b` (the card build tree) out of the merge. It is a scratch tree with
   its own history; the merge happens in a worktree of `victory-fork-history`.
+
+## Correction after trying it (2026-11-26 16:00)
+
+The file-by-file order above is not a valid unit of work, and this session learned
+it the cheap way: after resolving `emit/diff_tests.rs`, `emit/container.rs`,
+`io.rs` and `native.rs` by taking upstream's side and re-applying ours with
+`git apply --3way`, the crate cannot compile, because the two sides **renamed the
+same things in different files**. One example, from `container.rs`: our side has
+`Psv { gs: Option<u32> }`, upstream has `Psv { geometry: Option<u32> }`, and the
+field is set from `lower.rs` - a file further down the list. Resolving the struct
+without the setter renames the crate into a state that no `cargo check` can pass.
+
+So the unit of work is **a whole crate brought to a compiling, testing state**, not
+a file:
+
+1. Take upstream's side for every file of the crate (`git checkout marvisak/main -- <crate dir>`).
+2. Re-apply our side's semantic changes file by file as diffs against the base
+   (`git diff ffe310e..main -- <file>`), in the order the compiler complains.
+3. Gate: `cargo test -p <crate> --lib` on the merged crate before touching the next one.
+4. Order of crates: `victory-shader` first (it is the deepest and the most renamed),
+   then `victory-formats`, `victory-gpu`, `victory-hle`, `apps/victory`, then the docs.
+
+Budget honestly: `victory-shader` alone is 2-4 hours in one sitting (13 of our commits
+against 71 of theirs in `lower.rs`), and `victory-gpu` is larger. This is not a
+30-minute-slice job, and starting it in slices leaves a worktree that cannot compile
+and cannot be committed.
+
+The worktree `C:\Windows\Temp\merge-up` was reset to `4448167` after the attempt; the
+four resolved files were kept as diffs in `C:\Windows\Temp\*.patch` for the next
+person to reuse (`crates_victory-shader_src_emit_container.rs.patch` and its two
+siblings), and `diff_tests.rs`'s only change was the naming (4 occurrences of the
+game's name turned into "the title").
